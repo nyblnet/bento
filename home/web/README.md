@@ -306,11 +306,43 @@ the navigation, worker or not. Measured with this build's own worker in control
 navigation preload those rows pass a hostile page, which is the C1 mutant there.
 Still open:
 
-- **The tripwire trusts the worker by its URL.** It lists `/sw.js` and checks
-  the bytes it fetches itself, but a server can answer the browser's own
-  worker request (`Service-Worker: script`) differently from the extension's,
-  and the browser installs what it was given. Watching the worker's own
-  requests is a tripwire follow-up; until then a worker is trusted by its URL.
+- **The tripwire cannot read the installed worker's bytes.** It lists
+  `/sw.js` and checks the bytes it fetches itself, but a server can answer the
+  browser's own worker request (`Service-Worker: script`) differently from the
+  extension's, and the browser installs what it was given. The tripwire holds
+  that worker to the honest worker's own requests instead (GET, no query, the
+  release's paths, `/sw.js` only as the browser's script fetch, the honest
+  worker's request headers, no `Cookie` or `Referer` on them, and the
+  navigation preload header left at the browser's `true`; see
+  `home/webext/README.md`). A `Cookie` on a top-level library navigation is a
+  mismatch too (on a framed one it is not flagged), so this host must set no
+  cookie, a CDN's included, and no host under bento.page may set a
+  `Domain=bento.page` cookie. It does not verify the
+  bytes, and it sees only what such a worker fetches. A cloaked worker can
+  still change the text and attribute values of every page it answers (same
+  length, no new element) without making any request at all (measured: one
+  byte of text changed from the preload response, verdict ok). What the
+  browser then fetches from this origin because of such a change (measured: a
+  rewritten manifest `href` carried a query in Chrome's own manifest fetch) is
+  held to the same rules as the worker's requests, and so is a navigation the
+  page starts (measured: a meta refresh made of two rewritten attribute
+  values, a `Refresh` header on the worker's answer, and the worker's
+  `WindowClient.navigate()` each sent a query to the server in the navigation
+  preload): one the library origin starts must have no query and a path a
+  release serves, unless it reloads the URL the tab is already on. A
+  navigation that arrives by a same-origin redirect is held to the same
+  rules on every redirect target, not only where it lands (measured: a
+  worker sent a typed visit out to `/?s=…` and straight back to `/`). So on a
+  page that opens, such a change's bytes cannot ride in a URL or a header to
+  this origin. One case is accepted for launch 1: a worker that redirects a
+  navigation to a URL carrying bytes and then answers that leg with no
+  document (a 204, or `Response.error()`, which shows a network error page)
+  sends the bytes with no finding (measured). Every use visibly breaks the
+  navigation, since the library does not open, so it is not a silent
+  per-visit channel. The worker
+  can still pass data out through which allowed requests it, or the page,
+  makes, and when (a reload included); and requests to other origins are not
+  seen, since the extension has no host permission there.
 
 **Install.** `manifest.webmanifest` (name, `start_url` and `scope` `/`,
 standalone, 192 and 512 px icons), linked from the page and allowed by an exact

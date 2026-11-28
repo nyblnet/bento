@@ -105,7 +105,7 @@ const MUTANTS = [
   // the cross-site limit, after the element sequence: an added element is still caught
   { name: 'the full report\'s sequence not judged, cross-site (N1)', row: 'xsite-markup', file: J, from: 'if (Array.isArray(obs.elements) && !sameList(obs.elements, e.elements)) f.push', to: 'if (false) f.push' },
   // R4: a Refresh response header
-  { name: 'a Refresh header passes (R4)', row: 'refresh-header', file: J, from: "return (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []", to: 'return []' },
+  { name: 'a Refresh header passes (R4)', row: 'refresh-header', file: J, from: "const out = (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []", to: 'const out = []' },
   { name: 'the Refresh header is not recorded (R4)', row: 'refresh-header', file: W, from: ".filter((h) => h.name.toLowerCase() === 'refresh')", to: '.filter(() => false)' },
   { name: 'the first early report does not read the Refresh header (R4)', row: 'refresh-header-now', file: W, from: 'if (matches(h, cut(noHash(sender.url)), Number(obs.timeOrigin) || 0) && Array.isArray(h.refresh) && h.refresh.length) refresh = h.refresh', to: '' },
   { name: 'a withdrawn release is quiet (R1)', row: 'withdrawn', file: J, from: 'if (list.releases[index].withdrawn) return', to: 'if (false) return' },
@@ -124,9 +124,75 @@ const MUTANTS = [
   { name: 'the worker without navigation preload (C1): text + no-store', row: 'stage3-nostore-text', build: NO_PRELOAD },
   { name: 'bytes rule off, worker in control', row: 'stage3-text', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
   { name: 'the worker without navigation preload (C1): cross-site + no-store', row: 'stage3-cross-site-no-store', build: NO_PRELOAD },
+  // C5: the library worker's own requests (security ruling #954, F-W)
+  { name: 'the library worker\'s requests not watched (C5)', row: 'sw-cloak', file: W, from: "  chrome.webRequest?.onSendHeaders.addListener(onWorkerRequest, { urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])\n", to: '' },
+  { name: 'the worker script may be fetched by the worker itself (C5)', row: 'sw-cloak-launder', file: J, from: "if (list.releases.some((r) => (r.workers ?? []).includes(p)) && !browserScript) why(", to: 'if (false) why(' },
+  { name: 'a query allowed (C5)', row: 'worker-query', file: J, from: "if (String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
+  { name: 'any path allowed (C5)', row: 'worker-unlisted-path', file: J, from: "if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')", to: '' },
+  { name: 'any method allowed (C5)', row: 'worker-post', file: J, from: "if (req.method !== 'GET') why('not GET')", to: '' },
+  { name: 'the extension\'s own requests taken for the worker\'s (C5)', row: 'c5-honest-worker', file: W, from: 'if (d.initiator != null && d.initiator !== LIBRARY_ORIGIN) return null', to: '' },
+  { name: 'page requests taken for the worker\'s (C5)', row: 'c5-honest-worker', edits: [
+    { file: W, from: '  if (d?.tabId !== -1) return null\n', to: '' },
+    { file: W, from: "{ urls: [`${LIBRARY_ORIGIN}/*`], tabId: -1 }", to: "{ urls: [`${LIBRARY_ORIGIN}/*`] }" }] },
+  // the worker's request headers and the navigation preload value (security ruling on #983, M1)
+  { name: 'worker request headers not held (C5)', row: 'worker-header', file: J, from: '  for (const w of requestHeaderProblems(req.headers, ctx.nav, ownReferer)) why(w)\n', to: '' },
+  { name: 'header values not held (C5)', row: 'worker-header-held', edits: [
+    { file: J, from: "if (!HELD_REQUEST.get(n).includes(v)) out.push(", to: 'if (false) out.push(' },
+    { file: J, from: "      else if (v !== want) out.push(", to: '      else if (false) out.push(' }] },
+  { name: 'the preload header value not judged (C5)', row: 'preload-header', file: J, from: "  if (obs.preload != null && obs.preload !== 'true') out.push", to: '  if (false) out.push' },
+  { name: 'browser-filled header values read from top-level navigations only (C5)', row: 'framed', file: W, from: "addListener(onRequest, { urls: patterns(), types: ['main_frame', 'sub_frame'] }", to: "addListener(onRequest, { urls: patterns(), types: ['main_frame'] }" },
+  // Cookie and Referer: forbidden names whose values a worker chooses (security's second review of #983, M4)
+  { name: 'Cookie and Referer exempt as the browser\'s (C5)', row: 'worker-cookie', file: J, from: '    if (ABSENT_REQUEST.has(n)) { out.push(`a header the honest worker does not send: ${n}`); continue }', to: '    if (ABSENT_REQUEST.has(n)) continue' },
+  { name: 'Referer exempt as the browser\'s (C5)', row: 'worker-referer', file: J, from: '    if (ABSENT_REQUEST.has(n)) { out.push(', to: "    if (n === 'referer') continue\n    if (ABSENT_REQUEST.has(n)) { out.push(" },
+  { name: 'the navigation\'s Cookie not recorded (C5)', row: 'worker-cookie', file: W, from: "  const cookie = hv('cookie') != null", to: '  const cookie = false' },
+  { name: 'the browser\'s update-check Referer not allowed (C5)', row: 'c5-honest-soft-update', file: J, from: "    if (n === 'referer' && ownReferer != null && v === ownReferer) continue\n", to: '' },
+  { name: 'the preload header value not recorded (C5)', row: 'preload-header', file: W, from: 'preload: preload == null ? null : cut(preload), cookie },', to: 'preload: null, cookie },' },
+  // a library page's own requests: the browser's manifest fetch of a rewritten href (security's third review of #983, M6)
+  { name: 'a library page\'s own requests not watched (M6)', row: 'page-manifest-query', file: W, from: "  chrome.webRequest?.onSendHeaders.addListener(onPageRequest, { urls: [`${LIBRARY_ORIGIN}/*`] }, ['requestHeaders', 'extraHeaders'])\n", to: '' },
+  { name: 'a query allowed on a page\'s request (M6)', row: 'page-manifest-query', file: J, from: "if (!own && String(req.url).split('#')[0].includes('?')) why('a query')", to: '' },
+  { name: 'a page\'s requests never routed to the judge (M6)', row: 'page-manifest-query', file: W, from: "  if (typeof d?.tabId !== 'number' || d.tabId < 0) return null\n", to: '  return null\n' },
+  { name: 'a page\'s requests held to the documents\' paths (M6, the honest control)', row: 'c5-honest-manifest', file: J, from: "if (!own && !browserIcon && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why(", to: "if (!own && !browserIcon && !list.releases.some((r) => r.origins[origin]?.files[p]?.kind === 'document')) why(" },
+  { name: 'the browser\'s default icon fetch and the page\'s own Referer not excused (M6, a host\'s 404)', row: 'unlisted-404', edits: [
+    { file: J, from: 'const browserIcon = p === BROWSER_ICON', to: 'const browserIcon = false' },
+    { file: J, from: "      if (n === 'referer' && ownReferer(String(x?.value ?? ''))) continue\n", to: '' }] },
+  { name: 'the tab\'s own URL not excused (M6)', row: 'c5-honest-own-url', file: J, from: "const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl", to: 'const own = false' },
+  // navigations a library document starts: a meta refresh, a Refresh header, WindowClient.navigate() (security's fourth review of #983, M7)
+  { name: 'navigations a library page starts not watched (M7)', row: 'nav-meta-refresh', file: W, from: '  noteNavigation(d)\n', to: '' },
+  { name: 'a query allowed on a navigation the library starts (M7)', row: 'nav-refresh-header', file: J, from: "  if (target.indexOf('?') !== -1) flag('a query')\n", to: '' },
+  { name: 'library-initiated navigations never routed to the judge (M7)', row: 'nav-client-navigate', file: W, from: '  if (d.initiator !== LIBRARY_ORIGIN) return null\n', to: '  return null\n' },
+  { name: 'a reload of the URL the tab is on not excused (M7, the honest control)', row: 'c5-honest-reload', file: J, from: "  if (typeof ctx.hereUrl === 'string' && ctx.hereUrl !== '' && target === ctx.hereUrl && req?.method === 'GET') return []\n", to: '' },
+  // a sub_frame navigation the library page starts (security's fifth review of #983, n5)
+  { name: 'sub_frame navigations not judged (n5)', row: 'nav-sub-frame', file: W, from: "  if (d?.type !== 'main_frame' && d?.type !== 'sub_frame') return null\n  if (typeof d.tabId", to: "  if (d?.type !== 'main_frame') return null\n  if (typeof d.tabId" },
+  // the page-request URL is kept whole (n4): its once-per-session key must still be bounded (measured: 700
+  // 16 KB script paths filled session storage and the report page lost its check)
+  { name: 'the page-request key not bounded (n4)', row: 'oversized', file: W, from: "const shape = `${req.method} ${cut(u ? u.pathname : req.url)}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`\n  if (!(await firstTime(`${PREQ_PREFIX}", to: "const shape = `${req.method} ${u ? u.pathname : req.url}${String(req.url).includes('?') ? '?' : ''} ${req.type} ${req.initiator ?? '-'} ${failures.map((f) => f.why ?? f.rule).join('+')}`\n  if (!(await firstTime(`${PREQ_PREFIX}" },
+  // navigations that arrived by a same-origin redirect (security's fifth review of #983, M8)
+  { name: 'a redirected navigation not judged (M8)', row: 'nav-sw-redirect', edits: [
+    { file: W, from: '    if (!prev) noteRedirected(sender, obs)\n', to: '' },
+    { file: W, from: '  if (!hadEarly) noteRedirected(sender, obs)\n', to: '' }] },
+  { name: 'the redirect count not reported (M8)', row: 'nav-sw-redirect-net', edits: [
+    { file: O, from: 'tail: tail(), redirects: redirectsIn() }', to: 'tail: tail() }' },
+    { file: O, from: '      redirects: redirectsIn(),\n', to: '' }] },
+  { name: 'a redirect judged only on the full report (M8, a page that leaves)', row: 'nav-sw-redirect-bounce', file: W, from: '    if (!prev) noteRedirected(sender, obs)\n', to: '' },
+  { name: 'a redirect taken for a POST (M8, the honest control)', row: 'c5-honest-server-redirect', file: W, from: "method: 'GET', type: 'main_frame', initiator: null, arrived: 'redirect'", to: "method: 'POST', type: 'main_frame', initiator: null, arrived: 'redirect'" },
+  // the record of where the tab is, after the extension's worker stopped (security's fifth review of #983, M9)
+  { name: 'where the tab is shares the headers record\'s prefix (M9)', row: 'c5-reload-after-stop', file: W, from: "const HERE_PREFIX = 'twl:'", to: "const HERE_PREFIX = 'twh:'" },
+  { name: 'where the tab is never read from the session (M9)', row: 'c5-reload-after-stop', file: W, from: '  const before = req && mem === undefined ? chrome.storage.session.get(key) : null\n', to: '  const before = null\n' },
+  { name: 'the session record read after it is overwritten (M9, memory off)', row: 'nav-meta-refresh', edits: [
+    { file: W, from: '  const mem = HERE.get(key)\n', to: '  const mem = undefined\n' },
+    { file: W, from: '  const before = req && mem === undefined ? chrome.storage.session.get(key) : null\n', to: '  const before = req && mem === undefined ? chrome.storage.session.set({ [key]: hereOf(d.url) }).then(() => chrome.storage.session.get(key)) : null\n' }] },
+  // every target of a redirect chain (security's sixth review of #983, M10)
+  { name: 'only the final URL of a redirect chain judged (M10)', row: 'nav-sw-redirect-chain', file: W, from: '  const targets = urls.slice(-last.redirects)\n', to: '  const targets = urls.slice(-1)\n' },
+  { name: 'only a redirect count of 1 taken (M10, obs-eq1)', row: 'nav-sw-redirect-chain', file: O, from: 'n > 0 ? n : 0', to: 'n === 1 ? n : 0' },
+  { name: 'library navigation legs not recorded (M10)', row: 'nav-sw-redirect-chain-net', file: W, from: '  noteLeg(d)\n', to: '' },
+  { name: 'the legs never read from the session (M10, the extension worker stopped)', row: 'nav-sw-redirect-chain-stop', file: W, from: 'if (list === undefined) { const r = await chrome.storage.session.get(key);', to: 'if (list === undefined) { const r = {};' },
+  { name: 'the first, user-chosen leg judged as a target (M10, the honest control)', row: 'c5-honest-server-redirect', file: W, from: 'urls.slice(-last.redirects)', to: 'urls.slice(-last.redirects - 1)' },
   // /index.html answered as '/' (security ruling on #964, M1): without it an honest visit reads "unverified"
-  // (the mutant that drops the worker's /index.html line rides with C5, where it is red: on this tree alone the
-  // false warning did not reproduce, 8 of 8 quiet without the line; with C5's tabId -1 listener it is 3 in 8)
+  // Not registered: the build mutant that drops sw.ts's /index.html line. MEASURED red on macOS Chromium 149
+  // (stage3-index: 3 and 2 of 8 honest visits warned without the line, 0 of 8 with it), but CI's Linux
+  // Chromium did not reproduce the false warning (8 of 8 quiet without the line), so in CI it would be a
+  // survivor that proves nothing either way. Run it by hand with
+  //   TW_ROWS=stage3-index TW_BUILD_MUTANT='{"file":"sw.ts","from":"  if (url.pathname === \'/index.html\') url.pathname = \'/\'\n","to":""}'
   { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
   { name: 'bytes rule off, at /index.html', row: 'stage3-text-index', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
   // the build's own 404 page (security ruling #956 D1)

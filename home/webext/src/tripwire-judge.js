@@ -145,7 +145,7 @@ const isPrefix = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length <= b
 const sameScript = (seen, want) => (want.sha256 ? !seen.src && seen.sha256 === want.sha256 : seen.src === want.src)
 
 /** The rules that say "could not tell" rather than "this is not a release" (N4: they never share a warning with the others). */
-export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread'])
+export const UNVERIFIED_RULES = new Set(['bytes-unread', 'size-unread', 'incomplete', 'cache-unread', 'workers-unread', 'worker-request-unattributed', 'page-request-unattributed'])
 /** 'unverified' when every failure is one of those, else 'tampered'. Loud warnings are once per class per origin per session. */
 export const classOf = (failures) => (failures.length && failures.every((f) => UNVERIFIED_RULES.has(f.rule)) ? 'unverified' : 'tampered')
 
@@ -221,9 +221,22 @@ export function markupFailures(obs) {
   return (obs.flags ?? []).length ? [{ rule: 'markup', got: obs.flags }] : []
 }
 
-/** A Refresh response header navigates with no markup to flag: never in a release (R4). Other headers but CSP and Cache-Control are not checked. */
+/**
+ * A Refresh response header navigates with no markup to flag: never in a release (R4). Other response
+ * headers but CSP and Cache-Control are not checked.
+ * The navigation preload request header (Service-Worker-Navigation-Preload) is the browser's `true`
+ * unless a worker set another value (navigationPreload.setHeaderValue): the honest worker never does,
+ * and a value is bytes the worker sends out on every later navigation (security ruling on #983, M1).
+ * Absent (no worker, or no preload): nothing to judge.
+ * A Cookie on the library's navigation: the library sets none, so one is a value something on its
+ * origin chose (a worker's cookieStore.set), sent out on every later request (security ruling on
+ * #983, M4). Only its presence is recorded, never its value. Absent or unread: nothing to judge.
+ */
 export function headerFailures(obs) {
-  return (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []
+  const out = (obs.refresh ?? []).length ? [{ rule: 'refresh-header', got: obs.refresh }] : []
+  if (obs.preload != null && obs.preload !== 'true') out.push({ rule: 'preload-header', got: obs.preload })
+  if (obs.cookie === true) out.push({ rule: 'request-cookie' })
+  return out
 }
 
 /** Every registered worker is one some release lists, and its bytes (when fetched) are that release's. */
@@ -276,6 +289,180 @@ export function observationFailures(obs) {
 }
 
 const pathOf = (url) => { try { return new URL(url).pathname || '/' } catch { return null } }
+
+/**
+ * A request the library's own worker made (security ruling #954 C5, the cloaked
+ * worker): webRequest reports it with tabId -1 and the library origin as its
+ * initiator. The honest worker only fetches its precache (GET, no query, the
+ * build's own files) and, once installed, nothing else of its own (navigations
+ * come by navigation preload, which is the tab's request); the browser fetches
+ * the worker's script itself. So the allowlist is:
+ *   - GET, with no query (not even a bare `?`), on the library origin;
+ *   - a path some release in the list serves there (the served files are a
+ *     superset of the precache: the page, /index.html, the worker, the 404
+ *     page, the manifest and icons);
+ *   - a worker path (/sw.js) only as the BROWSER's worker-script fetch: type
+ *     `script`, Sec-Fetch-Dest `serviceworker` (a Sec- header no script can
+ *     set) and Service-Worker `script`. A worker re-fetching its own script
+ *     (to launder a cloaked copy) carries none of them.
+ *   - its request headers held to the honest worker's (security ruling on
+ *     #983, M1: a header is bytes the worker chooses). Cookie and Referer are
+ *     forbidden NAMES whose VALUES a worker still chooses (cookieStore.set,
+ *     fetch's `referrer` with an unsafe-url policy; security ruling on #983,
+ *     M4), and the honest worker's requests carry neither (measured, Chromium
+ *     149: its precache fetches omit credentials, and the library's
+ *     Referrer-Policy is no-referrer), so either one is a finding, but for
+ *     the browser's own update check of the worker script, whose Referer is
+ *     the script's own URL (measured: a soft update after a navigation). The other
+ *     forbidden names, Sec-* and Proxy-* are the browser's: their values are
+ *     its settings, or one of the few the fetch spec derives from the
+ *     request's mode and destination (which requests it makes: the covert
+ *     channel below). Every other header must be one the honest worker's
+ *     requests carry, with the value they carry (measured, Chromium 149: the
+ *     install's precache fetches and the browser's script fetch and update
+ *     check): Accept `*\/*`, Service-Worker `script`, and Accept-Language and
+ *     User-Agent equal to what the library's latest navigation sent
+ *     (`ctx.nav`). Any other name, or another value, is a finding; so are
+ *     headers that were not read, and a navigation record that is absent.
+ * A request with no initiator cannot be tied to the library's worker or ruled
+ * out as it: recorded as unverified, never allowed in silence.
+ * `req`: { url, method, type, initiator, headers: [{ name, value }] | null }.
+ * `ctx.nav`: { acceptLanguage, userAgent } from the latest library navigation, or null.
+ * This does not verify bytes: a worker that keeps to these requests can still
+ * pass data out through which of them it makes, and when (a covert channel),
+ * and it can answer pages with what it likes without making any request.
+ */
+export function workerRequestFailures(req, list, origin, ctx = {}) {
+  const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
+  if (req?.initiator == null) return [{ rule: 'worker-request-unattributed', got }]
+  let u
+  try { u = new URL(req.url) } catch { return [{ rule: 'worker-request', why: 'unreadable URL', got }] }
+  const out = []
+  const why = (w) => out.push({ rule: 'worker-request', why: w, got })
+  if (u.origin !== origin) why('another origin')
+  if (req.method !== 'GET') why('not GET')
+  if (String(req.url).split('#')[0].includes('?')) why('a query')
+  const p = u.pathname || '/'
+  if (!list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
+  const h = (name) => (Array.isArray(req.headers) ? req.headers.find((x) => String(x?.name).toLowerCase() === name)?.value ?? null : null)
+  const browserScript = req.type === 'script' && h('sec-fetch-dest') === 'serviceworker' && h('service-worker') === 'script'
+  if (list.releases.some((r) => (r.workers ?? []).includes(p)) && !browserScript) why('the worker script, not fetched as the browser\'s worker script')
+  // the browser's own update check names the script itself as its Referer (MEASURED, Chromium 149: a soft
+  // update after a navigation; the install's fetch and update() carry none): its value, not the worker's
+  const ownReferer = browserScript ? `${u.origin}${p}` : null
+  for (const w of requestHeaderProblems(req.headers, ctx.nav, ownReferer)) why(w)
+  return out
+}
+
+/**
+ * Why a library PAGE's own non-document request (a tab's, not a navigation) is not the honest library's
+ * (empty when it is). Security ruling on #983, M6: a cloaked worker may change an attribute value of a
+ * page it answers, with no request of its own, and the BROWSER then fetches what the page names (MEASURED,
+ * Chromium 149: `<link rel=manifest href="/manifest.webmanifest?s=…">` reached the server in Chrome's own
+ * manifest fetch, tabId = the tab, type `other`, initiator the library origin). So the page's requests to
+ * its own origin are held to the same rules as the worker's: GET, no query, a path a release serves, and
+ * no Cookie or Referer (the honest page is no-referrer, and the browser's manifest fetch omits credentials).
+ * Their other headers are the browser's: a page with no script of its own cannot set one.
+ */
+export function pageRequestFailures(req, list, origin, ctx = {}) {
+  const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
+  if (req?.initiator == null) return [{ rule: 'page-request-unattributed', got }]
+  let u
+  try { u = new URL(req.url) } catch { return [{ rule: 'page-request', why: 'unreadable URL', got }] }
+  const out = []
+  const why = (w) => out.push({ rule: 'page-request', why: w, got })
+  if (u.origin !== origin) why('another origin')
+  if (String(req.method) !== 'GET') why('not GET')
+  // the tab's own document URL, as its navigation asked for it (`ctx.ownUrl`, from webRequest): the
+  // tripwire's content script re-reads it from the HTTP cache (MEASURED: a tab `xmlhttprequest` GET of the
+  // page's URL). Its query and path are the navigation's, which the worker did not choose; judged on the rest
+  const own = typeof ctx.ownUrl === 'string' && String(req.url).split('#')[0] === ctx.ownUrl
+  if (!own && String(req.url).split('#')[0].includes('?')) why('a query')
+  const p = u.pathname || '/'
+  // the browser's own default icon fetch for a page that names none (MEASURED, Chromium 149: a host's 404
+  // page, type image): a fixed path; a query on it is still a query
+  const browserIcon = p === BROWSER_ICON
+  if (!own && !browserIcon && !list.releases.some((r) => r.origins[origin]?.files[p] !== undefined)) why('a path no release serves')
+  // a Referer that is the page's own URL (as its navigation asked for it) or its origin is the browser's, not
+  // the worker's (MEASURED: a host's 404 page has no no-referrer policy, and its requests name it)
+  const ownReferer = (v) => v === `${origin}/` || (typeof ctx.ownUrl === 'string' && v === ctx.ownUrl)
+  if (!Array.isArray(req.headers)) why('its request headers were not read')
+  else {
+    for (const x of req.headers) {
+      const n = String(x?.name ?? '').toLowerCase()
+      if (!ABSENT_REQUEST.has(n)) continue
+      if (n === 'referer' && ownReferer(String(x?.value ?? ''))) continue
+      why(`a header the honest page does not send: ${n}`)
+    }
+  }
+  return out
+}
+const BROWSER_ICON = '/favicon.ico'
+
+/**
+ * Why a NAVIGATION a library document started (a tab's or a frame's, initiator the library origin) is not
+ * the honest library's (empty when it is). Security ruling on #983, M7: a page the worker rewrites can make
+ * the browser navigate with no request of the page's own and no script: a meta refresh made of two changed
+ * attribute VALUES, a Refresh header on the worker's answer, or the worker's own WindowClient.navigate().
+ * MEASURED (Chromium 149): each is a main_frame request with initiator = the library origin, and its URL,
+ * query included, reaches the server in the navigation preload. The honest library starts one navigation
+ * to its own origin, its Reload button's location.reload(), to the URL the tab is already on (measured:
+ * initiator the library origin); it has no same-origin links and its worker navigates no client. Typed,
+ * reload, back and forward navigations carry NO initiator (measured) and are not judged here.
+ * `ctx.hereUrl`: the URL this tab or frame was last navigated to (webRequest's record), or null.
+ */
+export function navigationFailures(req, list, origin, ctx = {}) {
+  const got = { method: req?.method ?? null, url: req?.url ?? null, type: req?.type ?? null, initiator: req?.initiator ?? null }
+  const target = String(req?.url ?? '').split('#')[0]
+  // a reload of the document the tab or frame is on names nothing the worker chose
+  if (typeof ctx.hereUrl === 'string' && ctx.hereUrl !== '' && target === ctx.hereUrl && req?.method === 'GET') return []
+  let nu
+  try { nu = new URL(target) } catch { return [{ rule: 'navigation', why: 'unreadable URL', got }] }
+  const out = []
+  const flag = (w) => out.push({ rule: 'navigation', why: w, got })
+  if (nu.origin !== origin) flag('another origin')
+  if (req?.method !== 'GET') flag('not GET')
+  if (target.indexOf('?') !== -1) flag('a query')
+  const where = nu.pathname || '/'
+  if (!list.releases.some((r) => (r.origins[origin]?.files ?? {})[where] !== undefined)) flag('a path no release serves')
+  return out
+}
+
+// forbidden names whose values a script still chooses (cookieStore, fetch's referrer): never on the honest
+// worker's requests (security ruling on #983, M4)
+const ABSENT_REQUEST = new Set(['cookie', 'referer'])
+// request header names no script can set (the fetch spec's other forbidden request-header names): the browser's
+const FORBIDDEN_REQUEST = new Set(['accept-charset', 'accept-encoding', 'access-control-request-headers', 'access-control-request-method',
+  'connection', 'content-length', 'cookie2', 'date', 'dnt', 'expect', 'host', 'keep-alive', 'origin',
+  'set-cookie', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'via'])
+// the script-settable headers the honest worker's requests carry, each held to the value it carries (measured)
+const HELD_REQUEST = new Map([['accept', ['*/*']], ['service-worker', ['script']]])
+// the two the browser fills from its own settings: held to what the library's latest navigation sent
+const HELD_FROM_NAV = new Map([['accept-language', 'acceptLanguage'], ['user-agent', 'userAgent']])
+/**
+ * Why a worker request's headers are not the honest worker's (empty when they are). `ownReferer`: on
+ * the browser's own worker-script fetch, the one Referer it may carry (the script's own URL), else null.
+ */
+export function requestHeaderProblems(headers, nav, ownReferer = null) {
+  if (!Array.isArray(headers)) return ['its request headers were not read']
+  const out = []
+  for (const x of headers) {
+    const n = String(x?.name ?? '').toLowerCase()
+    const v = String(x?.value ?? '')
+    if (n === 'referer' && ownReferer != null && v === ownReferer) continue
+    if (ABSENT_REQUEST.has(n)) { out.push(`a header the honest worker does not send: ${n}`); continue }
+    if (FORBIDDEN_REQUEST.has(n) || n.startsWith('sec-') || n.startsWith('proxy-')) continue
+    if (HELD_REQUEST.has(n)) { if (!HELD_REQUEST.get(n).includes(v)) out.push(`a header the honest worker does not send: ${n} with another value`); continue }
+    if (HELD_FROM_NAV.has(n)) {
+      const want = nav?.[HELD_FROM_NAV.get(n)]
+      if (typeof want !== 'string') out.push(`a header with no navigation to hold it to: ${n}`)
+      else if (v !== want) out.push(`a header the honest worker does not send: ${n} with another value`)
+      continue
+    }
+    out.push(`a header the honest worker does not send: ${n}`)
+  }
+  return out
+}
 
 /** Is this path one some release serves on this origin? */
 export function listedPath(list, origin, url) {

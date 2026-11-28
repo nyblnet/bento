@@ -29,13 +29,20 @@
  *   TW_BUILD_MUTANT='{"file":"sw.ts","from":"…","to":"…"}'   builds release A with a home/web source
  *   mutant (BENTO_HOME_WEB_MUTANT, --dev only), e.g. the worker without navigation preload
  *
+ *   TW_H2=1 TW_ROWS=c5-honest-worker,c5-honest-soft-update   serves the library over HTTPS and
+ *   HTTP/2 (a throwaway certificate made with openssl, trusted by its SPKI hash only), the shape
+ *   home.bento.page has: the honest worker's request headers there are the ones the C5 hold is
+ *   measured against (security's second review of #983, M5). Rows that open a deck need the
+ *   http frame site, which an https library cannot frame: run the C5 rows only.
+ *
  * Every row names the rule it guards; scripts/test-webext-tripwire-mutants.mjs
  * turns each rule off and requires that row to go red.
  */
 import { execFileSync } from 'node:child_process'
-import { createHash, webcrypto } from 'node:crypto'
+import { createHash, createPublicKey, webcrypto } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
+import http2 from 'node:http2'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -57,7 +64,8 @@ process.on('exit', () => fs.rmSync(work, { recursive: true, force: true }))
 
 // --- origins and builds -------------------------------------------------------
 const [pl, pf, pr] = await freePorts(3)
-const LIB = `http://127.0.0.1:${pl}`, FRM = `http://localhost:${pf}`, CHAN = `http://127.0.0.1:${pr}`
+const H2 = !!process.env.TW_H2
+const LIB = `${H2 ? 'https' : 'http'}://127.0.0.1:${pl}`, FRM = `http://localhost:${pf}`, CHAN = `http://127.0.0.1:${pr}`
 const LIST_PATH = '/releases/home-web/served.json'
 const A = path.join(work, 'A')
 const BUILD_MUTANT = process.env.TW_BUILD_MUTANT || null
@@ -80,6 +88,9 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url)
   if (e.request.method !== 'GET' || u.origin !== self.location.origin) return
+  // only the two pages it precached: anything else (a favicon) is left to the page, as the build's worker
+  // leaves it, so the fixture makes no request of its own the tripwire would flag (ruling #954 C5)
+  if (u.pathname !== '/' && u.pathname !== '/index.html') return
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))
 })
 `
@@ -175,10 +186,20 @@ if (!honest.lib.get('/sw.js')?.body.equals(BUILD_SW)) throw new Error('the libra
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
-const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
-const serve = (key) => http.createServer((req, res) => {
+const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], heads: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
+// TW_H2: a throwaway certificate for 127.0.0.1, which the browser trusts by its SPKI hash alone
+const TLS = H2 ? (() => {
+  const key = path.join(work, 'tls-key.pem'), cert = path.join(work, 'tls-cert.pem')
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-days', '2', '-subj', '/CN=127.0.0.1',
+    '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', key, '-out', cert], { stdio: 'ignore' })
+  const pem = fs.readFileSync(cert, 'utf8')
+  const spki = createHash('sha256').update(createPublicKey(pem).export({ type: 'spki', format: 'der' })).digest('base64')
+  return { key: fs.readFileSync(key), cert: pem, spki }
+})() : null
+const serve = (key) => ((H2 && key === 'lib') ? (h) => http2.createSecureServer({ key: TLS.key, cert: TLS.cert, allowHTTP1: true }, h) : (h) => http.createServer(h))((req, res) => {
   const p = new URL(req.url, 'http://x').pathname
   state.hits.push(`${key} ${p}`)
+  state.heads.push({ key, p, u: req.url, h: req.headers, v: req.httpVersion })
   if (key === 'chan') {
     // the inline scripts' text, published beside the list (scripts/<sha256>.js)
     const sm = /^\/releases\/home-web\/scripts\/([0-9a-f]{64})\.js$/.exec(p)
@@ -186,6 +207,9 @@ const serve = (key) => http.createServer((req, res) => {
     if (p === LIST_PATH && state.list != null) { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); res.end(state.list); return }
     res.writeHead(404).end(); return
   }
+  // `cloak`: what the BROWSER's worker-script fetch of /sw.js gets (Service-Worker: script), while every
+  // other request, the extension's included, gets the release's bytes (security ruling #954 F-W)
+  if (key === 'lib' && p === '/sw.js' && state.cloak && req.headers['service-worker'] === 'script') { res.writeHead(200, state.cloak.headers); res.end(state.cloak.body); return }
   const f = state[key].get(p) ?? (key === 'lib' ? state.fallback : null)
   if (!f) { res.writeHead(404).end(); return }
   res.writeHead(f.status ?? 200, f.headers)
@@ -227,10 +251,10 @@ fs.writeFileSync(configPath, [
 const man = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'))
 const twScript = man.content_scripts.find((c) => c.js.includes('src/tripwire-observe.js'))
 if (!twScript || JSON.stringify(twScript.matches) !== JSON.stringify(['https://home.bento.page/*']) || twScript.all_frames !== false) throw new Error('manifest.json no longer has the tripwire content script this rig re-points')
-twScript.matches = ['http://127.0.0.1/*']
+twScript.matches = [H2 ? 'https://127.0.0.1/*' : 'http://127.0.0.1/*']
 // the frame site, as the shipped manifest will name it once its domain is chosen: in frames
 man.content_scripts.push({ ...twScript, matches: ['http://localhost/*'], all_frames: true, match_origin_as_fallback: undefined })
-man.host_permissions = man.host_permissions.filter((h) => h !== 'https://home.bento.page/*').concat(['http://127.0.0.1/*', 'http://localhost/*'])
+man.host_permissions = man.host_permissions.filter((h) => h !== 'https://home.bento.page/*').concat(['http://127.0.0.1/*', 'http://localhost/*', ...(H2 ? ['https://127.0.0.1/*'] : [])])
 fs.writeFileSync(path.join(EXT, 'manifest.json'), JSON.stringify(man, null, 2))
 for (const m of MUTANT ?? []) {
   const f = path.join(EXT, m.file)
@@ -244,7 +268,8 @@ for (const m of MUTANT ?? []) {
 // --- the browser ----------------------------------------------------------------
 const ctx = await chromium.launchPersistentContext(path.join(work, 'profile'), {
   channel: 'chromium', headless: !process.env.HEADED,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1'],
+  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1',
+    ...(H2 ? [`--ignore-certificate-errors-spki-list=${TLS.spki}`] : [])],
 })
 const sockets = []
 await ctx.routeWebSocket(/.*/, (ws) => { sockets.push(ws.url()); ws.close() })
@@ -309,9 +334,12 @@ async function fresh({ list = list1, held = null, lib = {}, frame = {}, keepWork
     await cdp.detach()
     await new Promise((r) => setTimeout(r, 300))
   }
+  // a cookie a row's worker set (worker-cookie) must not ride into the next row's requests
+  await ctx.clearCookies()
   await store.reset()
   for (const r of HELD.splice(0)) r.destroy()
   state.fallback = null
+  state.cloak = null
   state.lib = new Map(honest.lib); state.frame = new Map(honest.frame)
   for (const [k, v] of Object.entries(lib)) state.lib.set(k, v)
   for (const [k, v] of Object.entries(frame)) state.frame.set(k, v)
@@ -539,7 +567,7 @@ for (const [name, fb] of [
   await sleep(1000)
   if (name === 'unlisted-404') {
     ok(vs.every((e) => e?.verdict === 'unlisted' && e.warned.length === 0), `a host's 404 page is recorded quietly (${vs.map((e) => e?.verdict)})`)
-    ok(reportTabs().length === 0, 'no report tab')
+    ok(reportTabs().length === 0, `no report tab (${JSON.stringify((await store.log()).filter((e) => e.role === 'page-request').map((e) => [e.url, e.failures.map((f) => f.why ?? f.rule), e.page?.request?.type]))})`)
   } else {
     ok(vs.every((e) => e?.verdict === 'mismatch'), `the library's scripts at an unlisted path, without its CSP header, are a mismatch (${vs.map((e) => `${e?.verdict}[${rules(e)}]`)})`)
     ok(reportTabs().length === 1, `but ONE loud report tab for the origin, not three (${reportTabs().length})`)
@@ -692,7 +720,9 @@ if (row('dsd-leave')) {
   const evs = await since(t0)
   const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
   ok(state.hits.slice(h0).includes('lib /evil-ran-dsd'), 'the hidden script ran and left (the attack is real)')
-  ok(hostile?.verdict === 'mismatch' && rules(hostile).includes('elements') && hostile.warned.includes('tab'), `the visit is on record as a loud mismatch: its parse stopped matching any listed document (${hostile?.verdict} ${rules(hostile)} ${hostile?.warned})`)
+  // the hidden script's own fetch is a page-request finding too (M6), and may take the origin's one loud tab first
+  const pageReq = evs.find((e) => e.role === 'page-request' && e.url === `${LIB}/evil-ran-dsd`)
+  ok(hostile?.verdict === 'mismatch' && rules(hostile).includes('elements') && (hostile.warned.includes('tab') || (pageReq?.warned ?? []).includes('tab')), `the visit is on record as a loud mismatch: its parse stopped matching any listed document (${hostile?.verdict} ${rules(hostile)} ${hostile?.warned}; its fetch: ${pageReq?.warned})`)
 }
 
 if (row('dsd-leave-prefix')) {
@@ -1194,6 +1224,459 @@ if (STAGE3.some(row)) {
     const s = await showsFilf(page)
     ok(s === true && ev?.page?.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${ev?.page?.viaWorker})`)
     ok(ev?.verdict === 'mismatch' && ev.page.crossSite === true && rules(ev).split(',').includes('cache-control'), `a mismatch, seen as cross-site, on its Cache-Control (${ev?.verdict} [${rules(ev)}] crossSite ${ev?.page?.crossSite})`)
+  }
+  await fresh()
+}
+
+
+// --- C5: the library worker's own requests (security ruling #954, F-W the cloaked worker) -----------
+// The server answers the browser's own fetch of /sw.js (Service-Worker: script) with a different worker
+// than everyone else gets, the extension's fetch included, so the worker-bytes rule sees the release's
+// bytes. What the tripwire can still see is what that worker DOES: its own requests (webRequest, tabId -1,
+// initiator the library origin), held to the honest worker's: GET, no query, a path the release serves,
+// and /sw.js only as the browser's worker-script fetch.
+const C5_ROWS = ['c5-honest-worker', 'sw-cloak', 'sw-cloak-launder', 'worker-query', 'worker-unlisted-path', 'worker-post', 'worker-header', 'worker-header-held', 'preload-header', 'worker-cookie', 'worker-referer', 'c5-honest-soft-update', 'c5-honest-manifest', 'page-manifest-query', 'c5-honest-own-url', 'nav-meta-refresh', 'nav-refresh-header', 'nav-client-navigate', 'c5-honest-reload', 'nav-sub-frame', 'nav-sw-redirect', 'nav-sw-redirect-net', 'nav-sw-redirect-bounce', 'nav-sw-redirect-chain', 'nav-sw-redirect-chain-net', 'nav-sw-redirect-chain-stop', 'c5-honest-server-redirect', 'c5-reload-after-stop']
+const workerEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'worker')
+/** The build's worker with `extra` appended: installs (its precache matches its pins) and runs `extra` too. */
+const cloakOf = (extra) => ({ body: Buffer.concat([BUILD_SW, Buffer.from(`\n${extra}\n`)]), headers: { ...honest.lib.get('/sw.js').headers } })
+/** Install a cloaked worker on a first visit, then visit again under it; returns this row's worker events and server hits. */
+async function underCloak(extra) {
+  await fresh()
+  state.cloak = cloakOf(extra)
+  const t0 = Date.now(), h0 = state.hits.length, k0 = state.heads.length
+  await page.goto(`${LIB}/`)
+  const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+  await page.goto('about:blank')
+  const k1 = state.heads.length
+  const v = await visit(page, `${LIB}/`)
+  await sleep(2000)
+  return { ctl, v, evs: await workerEvents(t0), hits: state.hits.slice(h0), heads: state.heads.slice(k0), visitHeads: state.heads.slice(k1) }
+}
+const whys = (evs) => evs.flatMap((e) => e.failures.map((f) => f.why ?? f.rule))
+if (C5_ROWS.some(row)) {
+  if (row('c5-honest-worker')) {
+    section('c5-honest-worker: the build\'s own worker installs, answers two visits and an update check  (rule: its own requests are all allowed; positive control)')
+    await fresh()
+    // MEASURED, and printed: the header names the extension sees on the worker's requests (tabId -1),
+    // the set the C5 hold is held to; under TW_H2 over HTTPS and HTTP/2 (security's review of #983, M5)
+    await sw.evaluate((lib) => {
+      globalThis.__twSeen = []
+      globalThis.__twSeenFn ??= (d) => { if (d.tabId === -1) globalThis.__twSeen.push(`${new URL(d.url).pathname} ${d.type}: ${(d.requestHeaders ?? []).map((x) => x.name.toLowerCase()).sort().join(',')}`) }
+      chrome.webRequest.onSendHeaders.addListener(globalThis.__twSeenFn, { urls: [`${lib}/*`], tabId: -1 }, ['requestHeaders', 'extraHeaders'])
+    }, LIB)
+    const t0 = Date.now(), h0 = state.hits.length, k0 = state.heads.length
+    const ctl = await prime()
+    await fresh({ keepWorkers: true })
+    const t1 = Date.now()
+    const v1 = await visit(page, `${LIB}/`)
+    await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
+    await sleep(1500)
+    // `/` again, not /index.html: MEASURED, a preload navigation to a path the HTTP cache has never held is
+    // sometimes not stored there (here 2 in 8, after update() and a pause), so its bytes read as unread: an
+    // "unverified" warning on an honest page, from the C2 rule, not this one. Recorded in the PR and notes.
+    const v2 = await visit(page, `${LIB}/`)
+    await sleep(1500)
+    const hits = state.hits.slice(h0)
+    const precache = infoA.offline.precache.map((p) => p.path ?? p)
+    ok(ctl === `${LIB}/sw.js` && precache.every((p) => hits.includes(`lib ${p}`)), `the worker installed: the server saw its precache fetches (${precache.join(' ')}) and it controls the page`)
+    ok(hits.filter((h) => h === 'lib /sw.js').length >= 3, `and /sw.js fetched again: the browser's update check and the extension's own read (${hits.filter((h) => h === 'lib /sw.js').length} times)`)
+    ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v1.lib.page.viaWorker, `both visits ok (${v1.lib?.verdict} [${rules(v1.lib)}] ${v2.lib?.verdict} [${rules(v2.lib)}] errors ${JSON.stringify(v2.lib?.page?.errors)})`)
+    const evs = (await since(t0)).filter((e) => e.role === 'worker')
+    ok(evs.length === 0 && reportTabs().length === 0, `no worker-request finding, no report tab (${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
+    void t1
+    const seen = await sw.evaluate(() => { chrome.webRequest.onSendHeaders.removeListener(globalThis.__twSeenFn); return globalThis.__twSeen })
+    for (const x of [...new Set(seen)]) note(`extension saw (tabId -1) ${x}`)
+    const libHeads = state.heads.slice(k0).filter((q) => q.key === 'lib')
+    note(`the library server saw HTTP ${[...new Set(libHeads.map((q) => q.v))].join(', ')}; header names on the worker's /sw.js and precache requests: ${[...new Set(libHeads.filter((q) => q.h['sec-fetch-dest'] !== 'document').map((q) => Object.keys(q.h).filter((k) => !k.startsWith(':')).sort().join(',')))].join(' | ')}`)
+    ok(seen.length >= precache.length, `positive control on the measurement: the extension saw the worker's requests (${seen.length})`)
+    if (H2) ok(libHeads.length > 0 && libHeads.every((q) => q.v === '2.0'), `TW_H2: every library request came over HTTP/2 (${[...new Set(libHeads.map((q) => q.v))].join(', ')})`)
+  }
+  if (row('c5-honest-soft-update')) {
+    section('c5-honest-soft-update: the build\'s worker installs on a first visit; the next navigation brings the browser\'s soft update  (rule: its Referer, the script\'s own URL, is the browser\'s)')
+    await fresh()
+    const t0 = Date.now(), k0 = state.heads.length
+    await page.goto(`${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    const v = await visit(page, `${LIB}/`)
+    await sleep(2000)
+    // MEASURED (Chromium 149): this sequence's second /sw.js script fetch carries Referer: <the script's URL>
+    const soft = state.heads.slice(k0).filter((q) => q.key === 'lib' && q.p === '/sw.js' && q.h['service-worker'] === 'script' && q.h.referer === `${LIB}/sw.js`).length
+    ok(ctl && soft > 0, `the worker installed, and the browser's update check named the script as its Referer (${soft} time(s))`)
+    const evs = await workerEvents(t0)
+    ok(v.lib?.verdict === 'ok' && evs.length === 0 && reportTabs().length === 0, `the visit ok, no worker-request finding, no report tab (${v.lib?.verdict} [${rules(v.lib)}] ${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  if (row('sw-cloak')) {
+    section('sw-cloak: the browser\'s worker fetch gets the release\'s worker plus a fetch listener that beacons home  (rule: a worker request to a path no release serves)')
+    const r = await underCloak('self.addEventListener("fetch",()=>{fetch("/sw-evil-beacon",{cache:"no-store"}).catch(()=>{})})')
+    const beacons = r.hits.filter((h) => h === 'lib /sw-evil-beacon').length
+    ok(r.ctl && beacons > 0, `the cloaked worker is installed and ran its own code (beacons at the server: ${beacons})`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/sw-evil-beacon`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a path no release serves') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on the worker's request (${ev?.verdict} ${JSON.stringify(ev && whys([ev]))} ${ev?.class} ${ev?.warned})`)
+    ok(r.evs.length === 1, `recorded once for its kind, however often it fired (${r.evs.length})`)
+  }
+  if (row('sw-cloak-launder')) {
+    section('sw-cloak-launder: the cloaked worker re-fetches /sw.js itself on activate  (rule: the worker script only as the browser\'s worker-script fetch)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(fetch("/sw.js",{cache:"reload"}).catch(()=>{})))')
+    ok(r.ctl, 'the cloaked worker is installed')
+    const ev = r.evs.find((e) => e.url === `${LIB}/sw.js`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).some((w) => /not fetched as the browser's worker script/.test(w)), `a mismatch on its own /sw.js fetch (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  for (const [name, extra, url, why] of [
+    ['worker-query', 'self.addEventListener("activate",(e)=>e.waitUntil(fetch("/index.html?x=1").catch(()=>{})))', `${LIB}/index.html?x=1`, 'a query'],
+    ['worker-unlisted-path', 'self.addEventListener("activate",(e)=>e.waitUntil(fetch("/not-in-release").catch(()=>{})))', `${LIB}/not-in-release`, 'a path no release serves'],
+    ['worker-post', 'self.addEventListener("activate",(e)=>e.waitUntil(fetch("/",{method:"POST",body:"x"}).catch(()=>{})))', `${LIB}/`, 'not GET'],
+  ]) {
+    if (!row(name)) continue
+    section(`${name}: the cloaked worker fetches ${url.replace(LIB, '')}${name === 'worker-post' ? ' by POST' : ''} on activate  (rule: ${why})`)
+    const r = await underCloak(extra)
+    const seen = r.hits.some((h) => h === `lib ${new URL(url).pathname}`)
+    ok(r.ctl && seen, `the cloaked worker is installed and made the request (server saw it: ${seen})`)
+    const ev = r.evs.find((e) => e.url === url && whys([e]).includes(why))
+    ok(ev?.verdict === 'mismatch' && (ev.warned ?? []).length > 0, `a mismatch: ${why} (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  // security ruling on #983, M1: bytes in the request HEADERS of a request the allowlist permits
+  if (row('worker-header')) {
+    section('worker-header: the cloaked worker GETs /index.html (allowed: listed, no query) with a header of its own  (rule: its headers held to the honest worker\'s)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(fetch("/index.html",{cache:"no-store",headers:{"x-exfil":"secret-hdr-1"}}).catch(()=>{})))')
+    const sent = r.heads.filter((q) => q.p === '/index.html' && q.h['x-exfil'] === 'secret-hdr-1').length
+    ok(r.ctl && sent > 0, `the cloaked worker is installed and the header reached the server (${sent} time(s))`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/index.html`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a header the honest worker does not send: x-exfil') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on the header (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  if (row('worker-header-held')) {
+    section('worker-header-held: the cloaked worker puts its bytes in headers the honest one does send (Accept, Accept-Language, User-Agent)  (rule: held to their honest values)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(Promise.all([["accept","secret-a","/manifest.webmanifest"],["accept-language","secret-l","/icon-192.png"],["user-agent","secret-u","/icon-512.png"]].map(([k,v,u])=>fetch(u,{cache:"no-store",headers:{[k]:v}}).catch(()=>{})))))')
+    const at = { accept: '/manifest.webmanifest', 'accept-language': '/icon-192.png', 'user-agent': '/icon-512.png' }
+    // MEASURED here: which of the three the browser lets a worker set (the rest it overrides)
+    const reached = Object.keys(at).filter((k) => r.heads.some((q) => q.p === at[k] && String(q.h[k] ?? '').startsWith('secret-')))
+    note(`the server saw the worker's own value for: ${reached.join(', ') || 'none'}`)
+    ok(r.ctl && reached.includes('accept') && reached.includes('accept-language'), `the cloaked worker is installed and its Accept and Accept-Language values reached the server (${reached.join(', ')})`)
+    for (const k of reached) {
+      const ev = r.evs.find((e) => e.url === `${LIB}${at[k]}`)
+      ok(ev?.verdict === 'mismatch' && whys([ev]).includes(`a header the honest worker does not send: ${k} with another value`), `${k}: a mismatch on its value (${JSON.stringify(ev && whys([ev]))})`)
+    }
+  }
+  if (row('preload-header')) {
+    section('preload-header: the cloaked worker sets the navigation preload header value  (rule: Service-Worker-Navigation-Preload is the browser\'s true)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(self.registration.navigationPreload.enable().then(()=>self.registration.navigationPreload.setHeaderValue("secret-pre-2"))))')
+    const sent = r.visitHeads.filter((q) => q.p === '/' && q.h['service-worker-navigation-preload'] === 'secret-pre-2').length
+    ok(r.ctl && sent > 0, `the cloaked worker is installed and the tab's navigation carried its value to the server (${sent} time(s))`)
+    ok(r.v.lib?.verdict === 'mismatch' && rules(r.v.lib).split(',').includes('preload-header') && (r.v.lib.warned ?? []).includes('tab'), `the page: a loud mismatch on preload-header (${r.v.lib?.verdict} [${rules(r.v.lib)}] ${r.v.lib?.warned})`)
+  }
+  // security's second review of #983 (M4): forbidden header NAMES whose VALUES a worker chooses
+  if (row('worker-cookie')) {
+    section('worker-cookie: the cloaked worker sets a cookie (cookieStore) and GETs a listed path with it  (rule: no Cookie on the worker\'s requests, nor on the library\'s navigation)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(self.cookieStore.set({name:"x",value:"secret-ck-1"}).then(()=>fetch("/manifest.webmanifest",{cache:"no-store",credentials:"include"})).catch(()=>{})))')
+    const sent = r.heads.filter((q) => String(q.h.cookie ?? '').includes('secret-ck-1'))
+    const onVisit = r.visitHeads.filter((q) => q.p === '/' && String(q.h.cookie ?? '').includes('secret-ck-1')).length
+    ok(r.ctl && sent.some((q) => q.p === '/manifest.webmanifest') && onVisit > 0, `the cloaked worker is installed and its cookie reached the server (${sent.map((q) => q.p).join(' ')}; on the judged navigation ${onVisit})`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/manifest.webmanifest`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a header the honest worker does not send: cookie') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `the worker's request: a loud mismatch on its Cookie (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+    ok(r.v.lib?.verdict === 'mismatch' && rules(r.v.lib).split(',').includes('request-cookie'), `the next visit: a mismatch on the navigation's Cookie (${r.v.lib?.verdict} [${rules(r.v.lib)}])`)
+    ok(!JSON.stringify(await store.log()).includes('secret-ck-1'), 'the record names no cookie value')
+  }
+  if (row('worker-referer')) {
+    section('worker-referer: the cloaked worker GETs a listed path with a Referer of its own (fetch referrer, unsafe-url)  (rule: no Referer on the worker\'s requests)')
+    const r = await underCloak('self.addEventListener("activate",(e)=>e.waitUntil(fetch("/manifest.webmanifest",{cache:"no-store",referrer:"/secret-ref-2?x=secret-ref-q",referrerPolicy:"unsafe-url"}).catch(()=>{})))')
+    const sent = r.heads.filter((q) => q.p === '/manifest.webmanifest' && String(q.h.referer ?? '').includes('secret-ref')).length
+    ok(r.ctl && sent > 0, `the cloaked worker is installed and its Referer reached the server (${sent} time(s))`)
+    const ev = r.evs.find((e) => e.url === `${LIB}/manifest.webmanifest`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a header the honest worker does not send: referer') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on its Referer (${JSON.stringify(r.evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  // security's third review of #983 (M6): a cloaked worker rewrites an attribute VALUE of the page it
+  // answers (no request of its own, the residual M2 accepted), and the BROWSER then fetches what the page
+  // names: Chrome's own manifest fetch, a tab request (tabId = the tab, type other), carries the bytes
+  const pageEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'page-request')
+  /** Record what webRequest shows of the library's tab (non-document) requests, for a positive control. */
+  const watchTabRequests = () => sw.evaluate((lib) => {
+    globalThis.__twTab = []
+    globalThis.__twTabFn ??= (d) => { if (d.tabId >= 0 && d.type !== 'main_frame' && d.type !== 'sub_frame') globalThis.__twTab.push(`${d.type} ${d.method} ${d.url.replace(lib, '')}`) }
+    chrome.webRequest.onSendHeaders.addListener(globalThis.__twTabFn, { urls: [`${lib}/*`] }, ['requestHeaders', 'extraHeaders'])
+  }, LIB)
+  const tabRequestsSeen = () => sw.evaluate(() => { chrome.webRequest.onSendHeaders.removeListener(globalThis.__twTabFn); return globalThis.__twTab })
+  if (row('c5-honest-manifest')) {
+    section('c5-honest-manifest: a first visit installs the build\'s worker, a second visit under it; the browser fetches the page\'s manifest  (rule: the page\'s own requests allowed; honest control for M6)')
+    await fresh()
+    await watchTabRequests()
+    const t0 = Date.now(), k0 = state.heads.length
+    const v1 = await visit(page, `${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    const v2 = await visit(page, `${LIB}/`)
+    await sleep(2500)
+    const seen = await tabRequestsSeen()
+    for (const x of [...new Set(seen)]) note(`extension saw (a tab, not a document) ${x}`)
+    const mf = state.heads.slice(k0).filter((q) => q.key === 'lib' && q.p === '/manifest.webmanifest' && q.h['sec-fetch-dest'] === 'manifest')
+    // positive control: the request this rule judges happened, and the extension saw it as a tab request
+    ok(mf.length > 0 && seen.some((x) => x.startsWith('other GET /manifest.webmanifest')), `the browser's own manifest fetch reached the server (${mf.length}) and webRequest showed it as a tab request (${seen.filter((x) => /manifest/.test(x)).join(' | ')})`)
+    ok(ctl && v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `the worker installed; both visits ok, the second through it (${v1.lib?.verdict} [${rules(v1.lib)}] ${v2.lib?.verdict} [${rules(v2.lib)}] viaWorker ${v2.lib?.page?.viaWorker})`)
+    const evs = await pageEvents(t0)
+    ok(evs.length === 0 && reportTabs().length === 0, `no page-request finding, no report tab (${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  if (row('c5-honest-own-url')) {
+    section('c5-honest-own-url: honest visits to /?from=link, and to an unlisted path (a 404)  (rule: the content script\'s re-read of the tab\'s own URL is not a request the page named)')
+    await fresh()
+    await watchTabRequests()
+    const t0 = Date.now()
+    const v = await visit(page, `${LIB}/?from=link`)
+    await page.goto(`${LIB}/no-such-page`).catch(() => {})
+    await sleep(3000)
+    const seen = await tabRequestsSeen()
+    for (const x of [...new Set(seen)]) note(`extension saw (a tab, not a document) ${x}`)
+    // MEASURED (Chromium 149): the re-read of a 404 shows no tab request at all; the query visit's does
+    note(`the 404's re-read reached webRequest: ${seen.some((x) => x.startsWith('xmlhttprequest GET /no-such-page'))}`)
+    ok(seen.includes('xmlhttprequest GET /?from=link'), 'positive control: webRequest showed the content script\'s re-read of /?from=link as a tab request')
+    const evs = await pageEvents(t0)
+    ok(evs.length === 0 && reportTabs().length === 0, `no page-request finding, no report tab (${v.lib?.verdict} [${rules(v.lib)}]; ${JSON.stringify(evs.map((e) => [e.url, whys([e])]))})`)
+  }
+  if (row('page-manifest-query')) {
+    section('page-manifest-query: a cloaked worker answers the navigation from its preload with the manifest href carrying a query (same length), and lets the manifest fetch through  (rule: the page\'s own requests: no query)')
+    await fresh()
+    // the handler goes FIRST, ahead of the build's own fetch listener: it answers the navigation itself
+    // and returns before the build's handler for the manifest, so the browser's fetch reaches the network
+    const wrap = (handler) => `{const _ael=self.addEventListener.bind(self);self.addEventListener=(t,f,o)=>t==="fetch"?_ael(t,(e)=>{${handler};f(e)},o):_ael(t,f,o)}\n`
+    const handler = `const u=new URL(e.request.url);if(u.pathname==="/manifest.webmanifest")return;if(e.request.mode==="navigate"&&u.pathname==="/"){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>new Response((await r.text()).replace('href="/manifest.webmanifest"','href="/manifest.webmanifest?s=secret-mf-1234"').replace(', initial-scale=1"','"'),{status:r.status,headers:r.headers})));return}`
+    state.cloak = { body: Buffer.concat([Buffer.from(wrap(handler)), BUILD_SW]), headers: { ...honest.lib.get('/sw.js').headers } }
+    const t0 = Date.now()
+    await page.goto(`${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    const k1 = state.heads.length
+    const v = await visit(page, `${LIB}/`)
+    const href = await page.evaluate(() => document.querySelector('link[rel=manifest]')?.getAttribute('href')).catch((e) => String(e))
+    await until(async () => (await pageEvents(t0)).length > 0, 8000)
+    await sleep(1000)
+    const got = state.heads.slice(k1).filter((q) => q.key === 'lib' && String(q.u).includes('secret-mf-1234') && q.h['sec-fetch-dest'] === 'manifest')
+    const rawHits = state.heads.slice(k1).filter((q) => q.key === 'lib' && q.p === '/manifest.webmanifest').length
+    ok(ctl && href === '/manifest.webmanifest?s=secret-mf-1234' && v.lib?.page?.viaWorker === true, `the cloaked worker is installed and answered the page with the rewritten href (${href}, viaWorker ${v.lib?.page?.viaWorker})`)
+    ok(got.length > 0, `and the browser's own manifest fetch carried it to the server (${got.length} of ${rawHits} manifest requests)`)
+    const evs = await pageEvents(t0)
+    const ev = evs.find((e) => e.url === `${LIB}/manifest.webmanifest?s=secret-mf-1234`)
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab'), `a loud mismatch on the page's request (${JSON.stringify(evs.map((e) => [e.url, whys([e]), e.warned]))})`)
+    ok(ev?.page?.request?.type === 'other' && ev.page.request.initiator === LIB, `seen as the tab's request: type other, initiator the library origin (${ev?.page?.request?.type} ${ev?.page?.request?.initiator})`)
+  }
+
+  // --- navigations a library document starts (security's fourth review of #983, M7) -------------------
+  // MEASURED (Chromium 149): a meta refresh, a Refresh header and the worker's WindowClient.navigate() are
+  // each a main_frame request with initiator = the library origin, and the navigation preload carries the
+  // URL to the server; so is the honest Reload button's location.reload(), to the URL the tab is on.
+  const navEvents = async (t0) => (await since(t0)).filter((e) => e.role === 'navigation')
+  const watchNavs = () => sw.evaluate((lib) => {
+    globalThis.__twNav = []
+    globalThis.__twNavFn ??= (d) => { globalThis.__twNav.push(`${d.type} ${d.initiator ?? '-'} ${d.method} ${d.url.replace(lib, '')}`) }
+    chrome.webRequest.onSendHeaders.addListener(globalThis.__twNavFn, { urls: [`${lib}/*`], types: ['main_frame', 'sub_frame'] }, ['requestHeaders', 'extraHeaders'])
+  }, LIB)
+  const navsSeen = () => sw.evaluate(() => { chrome.webRequest.onSendHeaders.removeListener(globalThis.__twNavFn); return globalThis.__twNav })
+  const navWrap = (handler) => `{const _ael=self.addEventListener.bind(self);self.addEventListener=(t,f,o)=>t==="fetch"?_ael(t,(e)=>{${handler};f(e)},o):_ael(t,f,o)}\n`
+  /** Install a worker whose fetch handler runs `handler` first, then visit / under it; returns what the row needs. */
+  async function navUnder(handler, marker) {
+    await fresh()
+    state.cloak = { body: Buffer.concat([Buffer.from(navWrap(handler)), BUILD_SW]), headers: { ...honest.lib.get('/sw.js').headers } }
+    await page.goto(`${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    await sleep(300)
+    await watchNavs()
+    const t0 = Date.now(), k1 = state.heads.length
+    await page.goto(`${LIB}/`).catch((e) => note(`goto: ${e}`))
+    await until(async () => (await navEvents(t0)).length > 0, 8000)
+    await sleep(1500)
+    const seen = await navsSeen()
+    const got = state.heads.slice(k1).filter((q) => q.key === 'lib' && String(q.u).includes(marker))
+    return { ctl, t0, seen, got, evs: await navEvents(t0), final: page.url() }
+  }
+  const navCheck = (r, marker, how) => {
+    for (const x of [...new Set(r.seen)]) note(`extension saw (a navigation) ${x.replace(/x{20,}/g, 'x…')}`)
+    // positive control: the bytes did leave, in a navigation the library origin started
+    ok(r.ctl && r.got.length > 0 && r.seen.some((x) => x.startsWith(`main_frame ${LIB} GET /?s=${marker}`)), `the cloaked worker is installed and ${how} carried the query to the server (${r.got.length} request(s), ${r.got.map((q) => `${String(q.u).length}-char URL dest=${q.h['sec-fetch-dest']}`).join(' | ')})`)
+    const ev = r.evs.find((e) => String(e.url).startsWith(`${LIB}/?s=${marker}`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab') && reportTabs().length > 0, `a loud mismatch on the navigation (${JSON.stringify(r.evs.map((e) => [String(e.url).replace(LIB, '').slice(0, 40), whys([e]), e.warned]))})`)
+    ok(ev?.page?.request?.type === 'main_frame' && ev.page.request.initiator === LIB && ev.page.request.from === `${LIB}/`, `seen as a navigation the library page started, from the URL it was on (${ev?.page?.request?.type} ${ev?.page?.request?.initiator} from ${ev?.page?.request?.from})`)
+  }
+  if (row('nav-meta-refresh')) {
+    section('nav-meta-refresh: a cloaked worker changes two attribute VALUES of the page it answers: the CSP <meta> becomes a meta refresh to /?s=… (same length)  (rule: a navigation the library starts: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>{const t=await r.text();return new Response(t.replace(/http-equiv="Content-Security-Policy" content="([^"]*)"/,(m,c)=>'http-equiv="refresh" content="'+'0;url=/?s=secret-meta-'.padEnd(c.length+16,'x')+'"'),{status:r.status,headers:r.headers})}));return}`
+    navCheck(await navUnder(handler, 'secret-meta'), 'secret-meta', 'the browser\'s meta-refresh navigation')
+  }
+  if (row('nav-refresh-header')) {
+    section('nav-refresh-header: a cloaked worker adds Refresh: 0;url=/?s=… to its answer for /  (rule: a navigation the library starts: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>{const h=new Headers(r.headers);h.set("refresh","0;url=/?s=secret-hdr-1234");return new Response(await r.text(),{status:r.status,headers:h})}));return}`
+    navCheck(await navUnder(handler, 'secret-hdr'), 'secret-hdr', 'the browser\'s Refresh-header navigation')
+  }
+  if (row('nav-client-navigate')) {
+    section('nav-client-navigate: a cloaked worker calls WindowClient.navigate("/?s=…") on the page it answered  (rule: a navigation the library starts: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search&&!self.__twNavDone){self.__twNavDone=1;const id=e.resultingClientId;setTimeout(()=>clients.get(id).then((c)=>c&&c.navigate("/?s=secret-cn-1234")).catch(()=>{}),1000)}`
+    navCheck(await navUnder(handler, 'secret-cn'), 'secret-cn', 'WindowClient.navigate()')
+  }
+  if (row('c5-honest-reload')) {
+    section('c5-honest-reload: honest visits to /?from=link and to /, each reloaded by the library\'s own Reload button (location.reload())  (rule: a navigation to the URL the tab is on is not judged)')
+    await fresh()
+    await watchNavs()
+    const t0 = Date.now()
+    const v1 = await visit(page, `${LIB}/?from=link`)
+    await page.evaluate(() => document.getElementById('reload').click()).catch((e) => note(`reload: ${e}`))
+    await sleep(2500)
+    await page.goto('about:blank')
+    const v2 = await visit(page, `${LIB}/`)
+    await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.evaluate(() => document.getElementById('reload').click()).catch((e) => note(`reload: ${e}`))
+    await sleep(2500)
+    const seen = await navsSeen()
+    for (const x of [...new Set(seen)]) note(`extension saw (a navigation) ${x}`)
+    // positive control: the Reload button's navigations happened, and the library origin started them
+    ok(seen.includes(`main_frame ${LIB} GET /?from=link`) && seen.includes(`main_frame ${LIB} GET /`), 'the Reload button reloaded both pages: library-initiated navigations to /?from=link and to / (positive control)')
+    const evs = (await since(t0)).filter((e) => e.verdict === 'mismatch')
+    ok(v1.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && evs.length === 0 && reportTabs().length === 0, `no finding, no report tab (${v1.lib?.verdict} ${v2.lib?.verdict}; ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), whys([e])]))})`)
+  }
+  // n5 (security's fifth review of #983): a sub_frame navigation the library page starts, in a browser
+  if (row('nav-sub-frame')) {
+    section('nav-sub-frame: a cloaked worker\'s answer for / carries an <iframe src="/?s=…">  (rule: a navigation the library starts, in a frame too: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>{let t=(await r.text()).replace(/frame-src [^;"]+/g,"frame-src *");const i=t.lastIndexOf("</body>");t=t.slice(0,i)+'<iframe src="/?s=secret-sf-1234"></iframe>'+t.slice(i);const h=new Headers(r.headers);h.delete("content-security-policy");return new Response(t,{status:r.status,headers:h})}));return}`
+    const r = await navUnder(handler, 'secret-sf')
+    for (const x of [...new Set(r.seen)]) note(`extension saw (a navigation) ${x}`)
+    ok(r.ctl && r.got.some((q) => q.h['sec-fetch-dest'] === 'iframe') && r.seen.some((x) => x.startsWith(`sub_frame ${LIB} GET /?s=secret-sf`)), `the cloaked worker is installed and the frame's navigation carried the query to the server (${r.got.map((q) => `dest=${q.h['sec-fetch-dest']}`).join(' ')}) (positive control)`)
+    const ev = r.evs.find((e) => String(e.url).startsWith(`${LIB}/?s=secret-sf`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.page?.request?.type === 'sub_frame' && ev.page.request.initiator === LIB && (ev.warned ?? []).includes('badge'), `a mismatch on the sub_frame navigation (${JSON.stringify(r.evs.map((e) => [String(e.url).replace(LIB, '').slice(0, 30), e.page?.request?.type, whys([e]), e.warned]))})`)
+  }
+  // --- a navigation that ARRIVED by a same-origin redirect (security's fifth review of #983, M8) ----------
+  // MEASURED (Chromium 149): a worker's Response.redirect() for a TYPED navigation (no initiator) sends the
+  // tab on with the absent initiator kept, and the navigation preload carries the new URL to the server; the
+  // page's navigation entry says redirectCount 1 (0 on an honest typed visit)
+  const redirectCheck = (r, marker, how, redirects, what = 'the page\'s redirectCount', want = 1) => {
+    for (const x of [...new Set(r.seen)]) note(`extension saw (a navigation) ${x}`)
+    ok(r.ctl && r.got.length > 0 && r.seen.some((x) => x.startsWith(`main_frame - GET /?s=${marker}`)) && redirects === want, `the cloaked worker is installed and ${how} carried the query to the server (${r.got.length} request(s): ${r.got.map((q) => `dest=${q.h['sec-fetch-dest']} preload=${q.h['service-worker-navigation-preload'] ?? '-'}`).join(' | ')}), with no initiator; ${what} ${redirects} (positive control)`)
+    const ev = r.evs.find((e) => String(e.url).startsWith(`${LIB}/?s=${marker}`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.class === 'tampered' && (ev.warned ?? []).includes('tab') && reportTabs().length > 0, `a loud mismatch on the navigation (${JSON.stringify(r.evs.map((e) => [String(e.url).replace(LIB, '').slice(0, 40), whys([e]), e.warned]))})`)
+    ok(ev?.page?.request?.arrived === 'redirect' && ev.page.request.type === 'main_frame' && ev.page.request.initiator === null && ev.page.request.from === null, `recorded as a navigation that arrived by a redirect, judged on the redirect target (${JSON.stringify(ev?.page?.request)})`)
+  }
+  const redirectsOf = (p) => p.evaluate(() => performance.getEntriesByType('navigation')[0]?.redirectCount ?? null).catch(() => null)
+  if (row('nav-sw-redirect')) {
+    section('nav-sw-redirect: a cloaked worker answers a typed navigation to / with Response.redirect("/?s=…")  (rule: a navigation that arrived by a redirect: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"&&!u.search){e.respondWith(Response.redirect(new URL("/?s=secret-redir-1234",u).href,302));return}`
+    const r = await navUnder(handler, 'secret-redir')
+    redirectCheck(r, 'secret-redir', 'the redirected navigation', await redirectsOf(page))
+  }
+  if (row('nav-sw-redirect-net')) {
+    section('nav-sw-redirect-net: as nav-sw-redirect, and the worker leaves the /?s=… leg to the network  (rule: a navigation that arrived by a redirect: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"){if(!u.search){e.respondWith(Response.redirect(new URL("/?s=secret-rnet-1234",u).href,302));return}e.stopImmediatePropagation?.();throw 0}`
+    const r = await navUnder(handler, 'secret-rnet')
+    redirectCheck(r, 'secret-rnet', 'the redirected navigation (network leg)', await redirectsOf(page))
+  }
+  if (row('nav-sw-redirect-bounce')) {
+    section('nav-sw-redirect-bounce: the redirect to /?s=…, whose page then meta-refreshes back to /  (the round-4 bounce through a redirect; rule: a navigation that arrived by a redirect: no query)')
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"){if(!u.search&&!self.__twB){self.__twB=1;e.respondWith(Response.redirect(new URL("/?s=secret-bnc-1234",u).href,302));return}if(u.search){e.respondWith((e.preloadResponse||Promise.resolve()).then((r)=>r||fetch(e.request)).then(async(r)=>new Response((await r.text()).replace(/http-equiv="Content-Security-Policy" content="[^"]*"/,'http-equiv="refresh" content="0;url=/"'),{status:r.status,headers:r.headers})));return}}`
+    const r = await navUnder(handler, 'secret-bnc')
+    await sleep(1500)
+    const final = page.url()
+    redirectCheck(r, 'secret-bnc', 'the redirected navigation', r.seen.some((x) => x === 'main_frame - GET /') && r.seen.some((x) => x === `main_frame ${LIB} GET /`) ? 1 : 'no bounce seen', 'and the meta refresh back to / followed it: redirectCount (of a page that left)')
+    ok(final === `${LIB}/`, `and the tab ended back on / (${final.replace(LIB, '')})`)
+  }
+  // --- a redirect CHAIN out and back (security's sixth review of #983, M10) ----------------------------------
+  // the worker redirects a typed / to /?s=…, then that leg straight back to /: the server gets the query,
+  // and the page lands on a clean / with redirectCount 2. Each middle leg is a redirect target, and judged.
+  const chainRow = async (name, marker, second) => {
+    section(`${name}: a cloaked worker answers a typed / with Response.redirect("/?s=…"), then ${second ? 'awaits the preload and ' : ''}redirects that leg back to /  (rule: every redirect target: no query)`)
+    const handler = `const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"){if(!u.search&&!self.__twC){self.__twC=1;e.respondWith(Response.redirect(new URL("/?s=${marker}-1234",u).href,302));return}if(u.search.includes("${marker}")){e.respondWith(${second ? '(e.preloadResponse||Promise.resolve()).then(()=>Response.redirect(new URL("/",u).href,302))' : 'Response.redirect(new URL("/",u).href,302)'});return}}`
+    const r = await navUnder(handler, marker)
+    const redirects = await redirectsOf(page)
+    const legs = await sw.evaluate(async () => Object.entries(await chrome.storage.session.get(null)).filter(([k]) => k.startsWith('twg:')).map(([k, v]) => `${k} ${v.map((l) => l.url).join(' > ')}`)).catch((e) => [`unread: ${e}`])
+    note(`legs recorded: ${JSON.stringify(legs.map((x) => x.replaceAll(LIB, '')))}`)
+    const landed = (await since(r.t0)).filter((e) => e.role === 'library' && e.url === `${LIB}/`)
+    ok(r.final === `${LIB}/` && landed.length > 0, `the page landed on a clean / (${String(r.final).replace(LIB, '')}) and was judged there (positive control: the final URL alone says nothing)`)
+    redirectCheck(r, marker, 'the middle leg of the chain', redirects, 'the page\'s redirectCount', 2)
+  }
+  if (row('nav-sw-redirect-chain')) await chainRow('nav-sw-redirect-chain', 'secret-chain', false)
+  if (row('nav-sw-redirect-chain-net')) await chainRow('nav-sw-redirect-chain-net', 'secret-chnet', true)
+  // the legs after the EXTENSION's worker stopped mid-chain (M9's lesson: a fallback needs a row that uses it)
+  if (row('nav-sw-redirect-chain-stop')) {
+    section('nav-sw-redirect-chain-stop: as nav-sw-redirect-chain, the worker holds the /?s=… leg 4 s, and the extension\'s worker is stopped meanwhile  (rule: every redirect target, from the session record)')
+    await fresh()
+    const marker = 'secret-chstop'
+    state.cloak = { body: Buffer.concat([Buffer.from(navWrap(`const u=new URL(e.request.url);if(e.request.mode==="navigate"&&u.pathname==="/"){if(!u.search&&!self.__twC){self.__twC=1;e.respondWith(Response.redirect(new URL("/?s=${marker}-1234",u).href,302));return}if(u.search.includes("${marker}")){e.respondWith((e.preloadResponse||Promise.resolve()).then(()=>new Promise((r)=>setTimeout(r,4000))).then(()=>Response.redirect(new URL("/",u).href,302)));return}}`)), BUILD_SW]), headers: { ...honest.lib.get('/sw.js').headers } }
+    await page.goto(`${LIB}/`)
+    const ctl = await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await page.goto('about:blank')
+    await sleep(300)
+    const t0 = Date.now(), k1 = state.heads.length
+    const going = page.goto(`${LIB}/`).catch((e) => note(`goto: ${e}`))
+    const reached = await until(async () => state.heads.slice(k1).some((q) => q.key === 'lib' && String(q.u).includes(marker)), 8000)
+    await sleep(300)
+    await sw.evaluate(() => { globalThis.__twAlive = 1 })
+    const cdp = await ctx.newCDPSession(page)
+    const { targetInfos } = await cdp.send('Target.getTargets')
+    const tgt = targetInfos.find((x) => x.type === 'service_worker' && x.url.startsWith(`chrome-extension://${extId}/`))
+    let stopped = false
+    if (tgt) { try { stopped = (await cdp.send('Target.closeTarget', { targetId: tgt.targetId })).success } catch (e) { note(`closeTarget: ${e}`) } }
+    await cdp.detach().catch(() => {})
+    await going
+    await sleep(4000)
+    sw = await until(async () => { const w = ctx.serviceWorkers().find((x) => x.url().startsWith(`chrome-extension://${extId}/`)); return w && (await w.evaluate(() => !!globalThis.chrome?.storage?.local).catch(() => false)) ? w : null }, 20000) ?? sw
+    const reborn = await sw.evaluate(() => globalThis.__twAlive === undefined).catch((e) => `unread: ${e}`)
+    const redirects = await redirectsOf(page)
+    const evs = await since(t0)
+    note(`events ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), e.verdict, whys([e]), e.warned]))}`)
+    ok(ctl && reached && stopped && reborn === true && redirects === 2 && page.url() === `${LIB}/`, `positive control: the query reached the server (${reached}), the extension's worker was stopped mid-chain (${stopped}) and a new one judged with its memory empty (${reborn}), and the page landed on / with redirectCount ${redirects}`)
+    const ev = evs.find((e) => e.role === 'navigation' && String(e.url).startsWith(`${LIB}/?s=${marker}`))
+    ok(ev?.verdict === 'mismatch' && whys([ev]).includes('a query') && ev.page?.request?.arrived === 'redirect' && (ev.warned ?? []).includes('badge'), 'a mismatch on the middle leg, read from the session record')
+  }
+  if (row('c5-honest-server-redirect')) {
+    section('c5-honest-server-redirect: the server answers /index.html with a 301 to /, then a typed /?from=link  (rule: a redirect to a served path with no query is quiet; honest control for M8)')
+    await fresh({ lib: { '/index.html': { status: 301, headers: { location: '/', 'content-length': '0' }, body: Buffer.alloc(0) } } })
+    await watchNavs()
+    const t0 = Date.now()
+    const v = await visit(page, `${LIB}/index.html`)
+    const redirects = await redirectsOf(page)
+    const final = page.url()
+    await page.goto('about:blank')
+    const v2 = await visit(page, `${LIB}/?from=link`)
+    const redirects2 = await redirectsOf(page)
+    // a typed /index.html?from=link the server sends to /: the query was the person's (the FIRST leg), and
+    // the only redirect target is / (M10: the targets are the last N legs, never the user-chosen one)
+    await page.goto('about:blank')
+    const v3 = await visit(page, `${LIB}/index.html?from=link`)
+    const redirects3 = await redirectsOf(page)
+    const final3 = page.url()
+    await sleep(2000)
+    const seen = await navsSeen()
+    for (const x of [...new Set(seen)]) note(`extension saw (a navigation) ${x}`)
+    // positive control: the path executed: the document arrived by a redirect, and its report said so
+    ok(redirects === 1 && final === `${LIB}/` && v.lib?.page?.url === `${LIB}/`, `the server's 301 took the tab to / and the page counted it (redirectCount ${redirects}, at ${final.replace(LIB, '')}) (positive control)`)
+    const evs = (await since(t0)).filter((e) => e.verdict === 'mismatch')
+    ok(redirects3 === 1 && final3 === `${LIB}/` && seen.some((x) => x === 'main_frame - GET /index.html?from=link'), `the typed /index.html?from=link reached the server with its query and the 301 took the tab to / (redirectCount ${redirects3}, at ${final3.replace(LIB, '')}) (positive control)`)
+    ok(v.lib?.verdict === 'ok' && v2.lib?.verdict === 'ok' && v3.lib?.verdict === 'ok' && redirects2 === 0 && evs.length === 0 && reportTabs().length === 0, `no finding, no report tab (${v.lib?.verdict} ${v2.lib?.verdict} ${v3.lib?.verdict}, /?from=link redirectCount ${redirects2}; ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), whys([e])]))})`)
+  }
+  // --- the record of where the tab is, after the EXTENSION's worker stopped (security's fifth review, M9) ---
+  // MV3 stops an idle extension worker after ~30 s; the in-memory record is gone, and the session record is
+  // all a Reload has. It shared 'twh:' with the headers record, which overwrote and removed it.
+  if (row('c5-reload-after-stop')) {
+    section('c5-reload-after-stop: an honest visit to /?from=link; the extension\'s worker is stopped; the library\'s Reload button  (rule: a reload of the URL the tab is on, from the session record)')
+    await fresh()
+    await visit(page, `${LIB}/?from=link`)
+    await until(async () => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state === 'activated'), 20000)
+    await sleep(1500)
+    const here = await sw.evaluate(async () => Object.entries(await chrome.storage.session.get(null)).filter(([, v]) => typeof v === 'string').map(([k, v]) => `${k}=${v}`))
+    note(`session string records before the stop: ${JSON.stringify(here.map((x) => x.replace(/:\/\/[^/]+/, '://LIB')))}`)
+    await sw.evaluate(() => { globalThis.__twAlive = 1 })
+    const cdp = await ctx.newCDPSession(page)
+    const { targetInfos } = await cdp.send('Target.getTargets')
+    const tgt = targetInfos.find((x) => x.type === 'service_worker' && x.url.startsWith(`chrome-extension://${extId}/`))
+    let stopped = false
+    if (tgt) { try { stopped = (await cdp.send('Target.closeTarget', { targetId: tgt.targetId })).success } catch (e) { note(`closeTarget: ${e}`) } }
+    await cdp.detach().catch(() => {})
+    await sleep(2000)
+    const t0 = Date.now(), k0 = state.heads.length
+    await page.evaluate(() => document.getElementById('reload').click()).catch((e) => note(`reload: ${e}`))
+    await sleep(4000)
+    // the worker the webRequest event woke: a new one
+    const old = sw
+    sw = await until(async () => { const w = ctx.serviceWorkers().find((x) => x.url().startsWith(`chrome-extension://${extId}/`)); return w && (await w.evaluate(() => !!globalThis.chrome?.storage?.local).catch(() => false)) ? w : null }, 20000) ?? sw
+    const reborn = await sw.evaluate(() => globalThis.__twAlive === undefined).catch((e) => `unread: ${e}`)
+    const reloads = state.heads.slice(k0).filter((q) => q.key === 'lib' && q.u === '/?from=link' && q.h['sec-fetch-dest'] === 'document' && q.h['sec-fetch-site'] === 'same-origin').length
+    const evs = await since(t0)
+    note(`events ${JSON.stringify(evs.map((e) => [e.role, String(e.url).replace(LIB, ''), e.verdict, whys([e]), e.warned]))}; a new extension worker: ${sw !== old}`)
+    ok(here.some((x) => x.endsWith(`=${LIB}/?from=link`)) && stopped && reborn === true && reloads > 0, `positive control: the session held where the tab is (/?from=link), the extension's worker was stopped (${stopped}), a new one answered with its memory empty (${reborn}), and the Reload reached the server as a navigation the page started (${reloads})`)
+    ok(evs.some((e) => e.role === 'library' && e.verdict === 'ok') && !evs.some((e) => e.verdict === 'mismatch') && reportTabs().length === 0, 'the reloaded page judged ok; no finding, no report tab')
   }
   await fresh()
 }
