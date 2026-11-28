@@ -16,6 +16,7 @@
 //     there were no worker, so a fixed deploy (or a withdrawn build's
 //     replacement) wins on the next online visit. The cache answers only when
 //     the network fails.
+//   - /index.html is answered as '/', the same page by its other name.
 //   - Every other request (the release channel, the frame site, any other
 //     path) is left alone: no respondWith, never cached. Documents never pass
 //     through here: they are read from the person's device, never fetched.
@@ -77,6 +78,11 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
+  // /index.html is the library page by its other name (the host serves both; served.json lists
+  // both): answer it as '/'. Left to fall through, its navigation preload response was often not
+  // kept in the HTTP cache, so the tripwire could not read its bytes and an honest visit read as
+  // "unverified" (measured, 4 in 8 returning visits). Offline it opens from the '/' entry.
+  if (url.pathname === '/index.html') url.pathname = '/'
   if (e.request.method !== 'GET' || url.origin !== self.location.origin || !PATHS.has(url.pathname)) return
   // a navigation: the preload response the browser already started, else the network
   const pre = e.request.mode === 'navigate' ? e.preloadResponse : undefined

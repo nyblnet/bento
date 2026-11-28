@@ -18,10 +18,16 @@
  * Sockets are closed (context.routeWebSocket); DNS resolves nothing but the
  * two local hosts.
  *
- * A precache-and-serve service worker is a FIXTURE here, registered on the
- * library origin through a page with CSP bypassed, and served only in the rows
- * that want one (the library registers /sw.js itself since stage 3; see
- * `honest.lib.delete` below). Hostile workers are fixtures too.
+ * Release A is the home/web build as it is, its own service worker (/sw.js,
+ * stage 3) included: every row starts as a first visit (no worker), the
+ * library registers that worker on it, and the stage3-* rows run as a
+ * returning visitor with it active and in control. A cache-first precache
+ * worker is a FIXTURE for the older worker rows, listed in its own release (F)
+ * and registered through a page with CSP bypassed; hostile workers are
+ * fixtures too.
+ *
+ *   TW_BUILD_MUTANT='{"file":"sw.ts","from":"…","to":"…"}'   builds release A with a home/web source
+ *   mutant (BENTO_HOME_WEB_MUTANT, --dev only), e.g. the worker without navigation preload
  *
  * Every row names the rule it guards; scripts/test-webext-tripwire-mutants.mjs
  * turns each rule off and requires that row to go red.
@@ -37,7 +43,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const { freePorts, parseHeaders } = await import(path.join(ROOT, 'home/web/serve.mjs'))
 const { spliceDoc } = await import(path.join(ROOT, 'home/web/src/verify.ts'))
-const { describeBuild, nextServed } = await import(path.join(ROOT, 'scripts/lib/home-web-served.mjs'))
+const { describeBuild, nextServed, buildScriptTexts } = await import(path.join(ROOT, 'scripts/lib/home-web-served.mjs'))
 const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const chromium = pw.chromium ?? pw.default?.chromium
 
@@ -54,8 +60,17 @@ const [pl, pf, pr] = await freePorts(3)
 const LIB = `http://127.0.0.1:${pl}`, FRM = `http://localhost:${pf}`, CHAN = `http://127.0.0.1:${pr}`
 const LIST_PATH = '/releases/home-web/served.json'
 const A = path.join(work, 'A')
+const BUILD_MUTANT = process.env.TW_BUILD_MUTANT || null
 execFileSync(process.execPath, [path.join(ROOT, 'home/web/build.mjs'), '--out', A, '--library-origin', LIB, '--frame-origin', FRM,
-  '--release-base', `${CHAN}/releases/`, '--dev'], { stdio: ['ignore', 'ignore', 'inherit'] })
+  '--release-base', `${CHAN}/releases/`, '--dev'], { stdio: ['ignore', 'ignore', 'inherit'], env: { ...process.env, BENTO_HOME_WEB_MUTANT: BUILD_MUTANT ?? '' } })
+const infoA = JSON.parse(fs.readFileSync(path.join(A, 'build.json'), 'utf8'))
+if (BUILD_MUTANT) {
+  if (!infoA.mutant) throw new Error('TW_BUILD_MUTANT was set but the build says it carries no mutant')
+  console.log(`  mutant applied to the home/web build: ${infoA.mutant.slice(0, 70)}`)
+}
+if (JSON.stringify(infoA.serviceWorkers) !== '["/sw.js"]') throw new Error('the build no longer lists /sw.js as its worker')
+// the build's own worker: release A serves it, and the stage3-* rows run with it in control
+const BUILD_SW = fs.readFileSync(path.join(A, 'library/sw.js'))
 
 // the fixture worker: precache the library page, answer every same-origin GET from the cache
 const SW_HONEST = `// bento/home precache worker (rig fixture)
@@ -68,9 +83,10 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))
 })
 `
-fs.writeFileSync(path.join(A, 'library/sw.js'), SW_HONEST)
-const infoA = JSON.parse(fs.readFileSync(path.join(A, 'build.json'), 'utf8'))
-fs.writeFileSync(path.join(A, 'build.json'), JSON.stringify({ ...infoA, serviceWorkers: ['/sw.js'] }, null, 2))
+// release F: release A with the fixture worker in place of the build's, for the rows that register it
+const F = path.join(work, 'F')
+fs.cpSync(A, F, { recursive: true })
+fs.writeFileSync(path.join(F, 'library/sw.js'), SW_HONEST)
 
 // release B: the same build with different words on the page (a later release)
 const B = path.join(work, 'B')
@@ -80,8 +96,25 @@ const LEDE = 'Open a Bento document to view or present it.'
 if (libA.split(LEDE).length !== 2) throw new Error('the library page no longer carries the lede this rig edits')
 fs.writeFileSync(path.join(B, 'library/index.html'), libA.replace(LEDE, 'Open a Bento document to view or to present it.'))
 
+// release P: release A with a worker that answers navigations from navigation preload (the shape stage 3
+// takes, security ruling #954 C1), so webRequest sees the navigation even though the worker answers it
+const SW_PRELOAD = SW_HONEST.replace("self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))",
+  "self.addEventListener('activate', (e) => e.waitUntil(Promise.all([self.clients.claim(), self.registration.navigationPreload.enable()])))")
+  .replace("  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))",
+  `  if (e.request.mode === 'navigate') {
+    e.respondWith((async () => { try { const r = await e.preloadResponse; if (r) return r } catch {} try { return await fetch(e.request) } catch { return (await caches.match('/')) ?? Response.error() } })())
+    return
+  }
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((r) => r || fetch(e.request)))`)
+if (SW_PRELOAD === SW_HONEST || !SW_PRELOAD.includes('navigationPreload.enable') || !SW_PRELOAD.includes('preloadResponse')) throw new Error('the preload worker fixture did not take')
+const P = path.join(work, 'P')
+fs.cpSync(A, P, { recursive: true })
+fs.writeFileSync(path.join(P, 'library/sw.js'), SW_PRELOAD)
+
 const DAY = 86400e3
 const relA = await describeBuild(A, new Date(Date.now() - 10 * DAY).toISOString())
+const relP = await describeBuild(P, new Date(Date.now() - 10 * DAY).toISOString())
+const relF = await describeBuild(F, new Date(Date.now() - 10 * DAY).toISOString())
 const relB = await describeBuild(B, new Date().toISOString())
 const relBold = await describeBuild(B, new Date(Date.now() - 4 * DAY).toISOString())
 
@@ -101,6 +134,8 @@ const sign = async (payloadObj, k = KEY) => {
 const list1 = nextServed(null, relA)
 const list2 = nextServed(list1, relB)
 const list2old = nextServed(list1, relBold)
+const listP = nextServed(null, relP)
+const listF = nextServed(null, relF)
 
 // --- the deck the library opens (to get the frame page loaded) ------------------
 const REAL = path.join(ROOT, 'home/fixtures/gate1/real/slides-1.2.10')
@@ -131,23 +166,23 @@ function siteFiles(dir) {
   return files
 }
 const honest = { lib: siteFiles(path.join(A, 'library')), frame: siteFiles(path.join(A, 'frame')) }
-// Since stage 3 the library registers /sw.js itself on every visit. The rows that are not about
-// a worker model a visit with none (a first visit, or a browser that refused the registration),
-// so by default the site serves no /sw.js and that registration fails; a row that wants a worker
-// serves one (withWorker). This default does not settle what stage 3's own worker does to the
-// tripwire. Measured 2026-11-15 with the build's real worker (navigation preload on) in control:
-// library-byte, library-csp and both cross-site rows hold; no-store is still a mismatch, on
-// cache-control rather than bytes-unread. Open (home/web/README.md): a response kept out of the
-// HTTP cache by other headers (Vary: *), and a worker trusted by its URL.
-honest.lib.delete('/sw.js')
+// The site serves the build's own /sw.js, and the library registers it on every visit. Every row
+// starts with no worker on the library origin (fresh() clears them): a first visit, on which the
+// worker registers but does not answer the navigation. The stage3-* rows prime a returning
+// visitor first (the build's worker active and in control, navigation preload on), the shape
+// security's stage-3 review measured (ruling #954); the older worker rows register a fixture.
+if (!honest.lib.get('/sw.js')?.body.equals(BUILD_SW)) throw new Error('the library site does not serve the build\'s own /sw.js')
 const releaseB = siteFiles(path.join(B, 'library'))
 // a file may carry `status` and `hold` (send the body, keep the response open); `fallback` answers unlisted library paths
 const HELD = []
-const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], fallback: null }
+const state = { lib: new Map(honest.lib), frame: new Map(honest.frame), list: null, hits: [], fallback: null, scripts: new Map([...await buildScriptTexts(A), ...await buildScriptTexts(B)]) }
 const serve = (key) => http.createServer((req, res) => {
   const p = new URL(req.url, 'http://x').pathname
   state.hits.push(`${key} ${p}`)
   if (key === 'chan') {
+    // the inline scripts' text, published beside the list (scripts/<sha256>.js)
+    const sm = /^\/releases\/home-web\/scripts\/([0-9a-f]{64})\.js$/.exec(p)
+    if (sm && state.scripts.has(sm[1])) { res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); res.end(state.scripts.get(sm[1])); return }
     if (p === LIST_PATH && state.list != null) { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); res.end(state.list); return }
     res.writeHead(404).end(); return
   }
@@ -261,8 +296,19 @@ const section = (m) => console.log(`\n=== ${m}`)
 
 const page = await ctx.newPage()
 await closeExtras(page)
-async function fresh({ list = list1, held = null, lib = {}, frame = {} } = {}) {
+async function fresh({ list = list1, held = null, lib = {}, frame = {}, keepWorkers = false } = {}) {
   await closeExtras(page)
+  // the last row's document leaves first (its pagehide report lands now, not in this row's record)
+  await page.goto('about:blank').catch(() => {})
+  await new Promise((r) => setTimeout(r, 400))
+  // a first visit: no worker and no worker cache on the library origin. Cleared through the
+  // DevTools protocol, never from a library page (which the old worker would answer).
+  if (!keepWorkers) {
+    const cdp = await ctx.newCDPSession(page)
+    await cdp.send('Storage.clearDataForOrigin', { origin: LIB, storageTypes: 'service_workers,cache_storage' })
+    await cdp.detach()
+    await new Promise((r) => setTimeout(r, 300))
+  }
   await store.reset()
   for (const r of HELD.splice(0)) r.destroy()
   state.fallback = null
@@ -430,10 +476,11 @@ for (const hold of [false, true]) {
   await sleep(ORPHAN_WAIT)
   const evs = await since(t0)
   const blobEv = evs.find((e) => e.url.startsWith('blob:'))
-  const earlyEv = evs.find((e) => e.early)
+  const earlyEv = evs.find((e) => e.early && !e.url.startsWith('blob:'))
   ok(page.url().startsWith('blob:'), `the hostile document is running at ${page.url().slice(0, 40)}`)
+  note(`events: ${evs.map((e) => `${e.url.slice(-20)}${e.early ? '(early)' : ''}=${e.verdict}/${e.class}[${rules(e)}]{${e.warned}} flags ${e.page?.flags}`).join(' | ')}`)
   ok(blobEv?.verdict === 'mismatch' && blobEv.page.flags.some((f) => f.startsWith('document:blob')), `the blob: document itself is a mismatch (${blobEv?.verdict} ${blobEv?.page.flags})`)
-  ok(earlyEv?.verdict === 'mismatch' && rules(earlyEv) === 'scripts', `the hostile page's EARLY report, never settled, is a mismatch on scripts (${earlyEv?.verdict} ${rules(earlyEv)})`)
+  ok(earlyEv?.verdict === 'mismatch' && rules(earlyEv).split(',').includes('scripts'), `the hostile page's EARLY report, never settled, is a mismatch on its script (${earlyEv?.verdict} ${rules(earlyEv)})`)
   ok(reportTabs().length === 1, `one loud report tab for the origin (${reportTabs().length})`)
 }
 
@@ -461,13 +508,22 @@ if (row('no-store')) {
 }
 
 if (row('held-open')) {
-  section('held-open: the honest library\'s response never ends  (rules: incomplete, size-unread)')
+  section('held-open: the honest library\'s response never ends  (rule: a visit cut short that is the clean start of a release is recorded quietly)')
   const b = libDoc.body.toString('utf8')
   await fresh({ lib: both({ body: Buffer.from(b.slice(0, b.indexOf('</main>'))), hold: true, headers: libDoc.headers }) })
   const t0 = Date.now()
   await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
   const ev = await until(async () => (await since(t0)).find((e) => !e.early), 75000)
-  ok(ev?.verdict === 'mismatch' && rules(ev).includes('incomplete') && rules(ev).includes('size-unread'), `an unfinished parse is never ok (${ev?.verdict} ${rules(ev)})`)
+  ok(ev?.verdict === 'incomplete' && ev.page.aborted && (ev.warned ?? []).length === 0 && reportTabs().length === 0, `an honest visit cut short: incomplete, recorded quietly (${ev?.verdict} aborted ${ev?.page?.aborted} warned ${ev?.warned})`)
+}
+
+if (row('held-open-hostile')) {
+  section('held-open-hostile: a hostile page whose response never ends  (rules: incomplete, size-unread: never ok)')
+  await fresh({ lib: both(hostileScriptPage('window.__evil=1', { hold: true })) })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  const ev = await until(async () => (await since(t0)).find((e) => !e.early), 75000)
+  ok(ev?.verdict === 'mismatch' && rules(ev).includes('incomplete') && rules(ev).includes('size-unread'), `an unfinished hostile parse is never ok (${ev?.verdict} ${rules(ev)})`)
 }
 
 for (const [name, fb] of [
@@ -620,6 +676,97 @@ if (row('about-popup')) {
   ok(ev?.verdict === 'mismatch' && ev.origin === LIB && ev.page.flags.some((f) => f.startsWith('document:about')), `the about: document is on record as a mismatch of the library origin (${ev?.verdict} ${ev?.origin} ${ev?.page?.flags})`)
   if (pop) await pop.close().catch(() => {})
 }
+
+// --- N1: what the parse looks like, as it happens; N4: visits cut short, and warnings by class ----------------
+const CSP_EVIL = "script-src 'unsafe-inline'; connect-src 'self'"
+
+if (row('dsd-leave')) {
+  section('dsd-leave: stage 1, a script in a declarative shadow root (attached after the observer last looked) runs, then leaves for an honest page  (rule: the element sequence, reported as it grows)')
+  const head = '<!doctype html><html><head><meta charset="utf-8"><title>bento/home</title></head><body><div id="h">' + '<p>'.repeat(300)
+  const tail = "<template shadowrootmode=\"open\"><script>fetch('/evil-ran-dsd');location.replace('/index.html')<\/script></template></div>"
+  await fresh({ lib: { '/': { body: Buffer.from(head + tail), headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': CSP_EVIL }, hold: true, split: [Buffer.byteLength(head), 800] } } })
+  const h0 = state.hits.length
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(3500 + ORPHAN_WAIT)
+  const evs = await since(t0)
+  const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
+  ok(state.hits.slice(h0).includes('lib /evil-ran-dsd'), 'the hidden script ran and left (the attack is real)')
+  ok(hostile?.verdict === 'mismatch' && rules(hostile).includes('elements') && hostile.warned.includes('tab'), `the visit is on record as a loud mismatch: its parse stopped matching any listed document (${hostile?.verdict} ${rules(hostile)} ${hostile?.warned})`)
+}
+
+if (row('dsd-leave-prefix')) {
+  section('dsd-leave-prefix: the honest library\'s own start, then a declarative shadow root on <main> whose script leaves  (rule: a shadow root is flagged as the parse goes on)')
+  const t = libDoc.body.toString('utf8')
+  const at = t.indexOf('<main>') + '<main>'.length
+  // the meta CSP stays an element (the start must match the honest one), with a policy that lets the script run
+  const head = t.slice(0, at).replace(/(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/, (_, a, b) => `${a}script-src 'unsafe-inline'${b}`)
+  const tail = "<template shadowrootmode=\"open\"><script>fetch('/evil-ran-dsdp');location.replace('/index.html')<\/script>"
+  await fresh({ lib: { '/': { body: Buffer.from(head + tail), headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': CSP_EVIL }, hold: true, split: [Buffer.byteLength(head), 800] } } })
+  const h0 = state.hits.length
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(3500 + ORPHAN_WAIT)
+  const evs = await since(t0)
+  const hostile = evs.find((e) => e.early && e.url === `${LIB}/`)
+  ok(state.hits.slice(h0).includes('lib /evil-ran-dsdp'), 'the hidden script ran and left (the attack is real)')
+  ok(!!hostile, `the visit is on record (${hostile?.verdict} ${rules(hostile)} flags ${hostile?.page?.flags})`)
+  ok(hostile?.verdict === 'mismatch' && hostile.page.flags.includes('shadow-root'), `as a mismatch: the shadow root was flagged (${hostile?.verdict} ${hostile?.page?.flags})`)
+}
+
+if (row('visit-started')) {
+  section('visit-started: a listed page that shows the observer nothing, then is left  (rule: every visit is on record)')
+  // the honest page's own first bytes, up to its first element the observer records (html and head it does not)
+  const lt = libDoc.body.toString('utf8')
+  await fresh({ lib: both({ body: Buffer.from(lt.slice(0, lt.indexOf('<meta'))), hold: true, headers: libDoc.headers }) })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(1000)
+  await page.goto('about:blank').catch(() => {})
+  await sleep(ORPHAN_WAIT)
+  const ev = (await since(t0)).find((e) => e.url === `${LIB}/`)
+  note(`visit-started events: ${JSON.stringify((await store.log()).slice(0, 4).map((e) => [e.url, e.early, e.verdict, e.at]))}`)
+  ok(ev?.verdict === 'incomplete' && (ev.warned ?? []).length === 0, `the visit is on record, quietly, as incomplete (${ev?.verdict} ${ev?.warned})`)
+}
+
+if (row('popup-decoy')) {
+  section('popup-decoy: a third party opens the honest library and closes it mid-script, then a real hostile deploy follows  (rules: a script cut short is an exact prefix of the published text; the decoy is quiet; the real mismatch is loud)')
+  await fresh()
+  const t = libDoc.body.toString('utf8')
+  const mid = Buffer.byteLength(t.slice(0, t.indexOf('<script>') + 8 + 2000))
+  for (const p of ['/', '/index.html']) state.lib.set(p, { body: libDoc.body, headers: libDoc.headers, split: [mid, 5000] })
+  state.frame.set('/attacker', { body: Buffer.from(`<!doctype html><button id=b style="width:300px;height:100px" onclick="window.__w=window.open('${LIB}/');setTimeout(function(){window.__w.close()},1500)">go</button>`), headers: { 'content-type': 'text/html' } })
+  await page.goto(`${FRM}/attacker`)
+  const t0 = Date.now()
+  const popP = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null)
+  await page.click('#b')
+  await popP
+  await sleep(3000 + ORPHAN_WAIT)
+  const evs = await since(t0)
+  const decoy = evs.find((e) => e.url === `${LIB}/`)
+  note(`decoy: ${JSON.stringify({ early: decoy?.early, size: decoy?.page?.size, aborted: decoy?.page?.aborted, complete: decoy?.page?.complete, elements: decoy?.page?.elements?.length, scripts: decoy?.page?.scripts?.length, errors: decoy?.page?.errors, partial: decoy?.page?.partial, all: evs.map((e) => e.url + (e.early ? '(e)' : '') + '=' + e.verdict) })}`)
+  ok(!!decoy && ['incomplete', 'ok'].includes(decoy.verdict) && (decoy.warned ?? []).length === 0 && reportTabs().length === 0, `the closed honest visit is recorded quietly (${decoy?.verdict} ${rules(decoy)} ${decoy?.warned}; partial ${JSON.stringify(decoy?.page?.partial)})`)
+  await closeExtras(page)
+  for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf'))
+  const v = await visit(page, `${LIB}/`)
+  ok(v.lib?.verdict === 'mismatch' && v.lib.warned.includes('tab'), `then a real hostile deploy is LOUD (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.warned})`)
+}
+
+if (row('class-keys')) {
+  section('class-keys: an "unverified" mismatch first, then a "tampered" one, same session  (rule: one loud warning per class, so the first cannot silence the second)')
+  await fresh()
+  // the browser keeps no copy of the honest page this once (as a cleared or full cache would): its bytes cannot be read
+  const cdp = await ctx.newCDPSession(page)
+  await cdp.send('Network.enable'); await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
+  const a = await visit(page, `${LIB}/`)
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: false }); await cdp.detach()
+  ok(a.lib?.verdict === 'mismatch' && a.lib.class === 'unverified' && a.lib.warned.includes('tab'), `honest page, bytes unreadable: unverified, loud once (${a.lib?.verdict} ${a.lib?.class} ${rules(a.lib)} ${a.lib?.warned})`)
+  for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf'))
+  await closeExtras(page)
+  const b = await visit(page, `${LIB}/`)
+  ok(b.lib?.verdict === 'mismatch' && b.lib.class === 'tampered' && b.lib.warned.includes('tab'), `then a changed byte: tampered, loud too (${b.lib?.verdict} ${b.lib?.class} ${b.lib?.warned})`)
+}
+
 for (const [name, bad] of [['cross-site-link', false], ['cross-site-no-store', true]]) {
   if (!row(name)) continue
   section(`${name}: the library reached by a link on another site${bad ? ', one byte changed and sent no-store' : ''}  (rules: a cross-site navigation's bytes are not judged; its Cache-Control header is)`)
@@ -639,8 +786,55 @@ for (const [name, bad] of [['cross-site-link', false], ['cross-site-no-store', t
   else ok(ev?.verdict === 'mismatch' && rules(ev).split(',').includes('cache-control'), `no-store, reached from another site: a mismatch on its Cache-Control header (${ev?.verdict} ${rules(ev)})`)
 }
 
+
+if (row('xsite-markup')) {
+  section('xsite-markup: reached by a link on another site, a same-length MARKUP change (the lede becomes a link elsewhere)  (rule: the element sequence still judges a cross-site visit)')
+  const LEDE = 'Open a Bento document to view or present it.'
+  const link = '<a href="http://x.example/">Open it</a>'.padEnd(LEDE.length, ' ')
+  const body = variant(libDoc, LEDE, link)
+  ok(body.body.length === libDoc.body.length, 'the change keeps the length (size cannot catch it)')
+  await fresh({ lib: both(body) })
+  state.frame.set('/opener', { body: Buffer.from(`<!doctype html><a id=l href="${LIB}/">link</a>`), headers: { 'content-type': 'text/html' } })
+  await page.goto(`${FRM}/opener`)
+  const t0 = Date.now()
+  await page.click('#l')
+  const ev = await until(async () => (await since(t0)).find((e) => e.url === `${LIB}/` && !e.early), 20000)
+  const shown = await page.evaluate(() => !!document.querySelector('a[href="http://x.example/"]')).catch(() => null)
+  ok(shown === true && ev?.page?.crossSite === true && !ev.observed?.bytes, `the injected link is on screen, on a cross-site visit whose bytes are not judged (shown ${shown}, crossSite ${ev?.page?.crossSite})`)
+  ok(ev?.verdict === 'mismatch' && rules(ev).split(',').includes('elements') && (ev.warned ?? []).includes('tab'), `a loud mismatch on the element sequence (${ev?.verdict} ${rules(ev)} ${ev?.warned})`)
+}
+
+for (const [name, secs] of [['refresh-header', 1], ['refresh-header-now', 0]]) {
+  if (!row(name)) continue
+  section(`${name}: the honest bytes, sent with \`Refresh: ${secs}; url=<another site>\` on a direct visit  (rule: a Refresh header is never in a release)`)
+  await fresh({ lib: both({ body: libDoc.body, headers: { ...libDoc.headers, refresh: `${secs}; url=${FRM}/phish` } }) })
+  state.frame.set('/phish', { body: Buffer.from('<!doctype html>phish'), headers: { 'content-type': 'text/html' } })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`).catch(() => {})
+  await sleep(2500 + (secs ? 0 : ORPHAN_WAIT))
+  const evs = (await since(t0)).filter((e) => e.url === `${LIB}/`)
+  note(`${name} events: ${JSON.stringify(evs.map((e) => [e.early ? 'early' : 'full', e.verdict, rules(e), e.page?.aborted, e.page?.refresh]))}`)
+  ok(page.url().endsWith('/phish'), `the tab left for the other site (the attack is real): ${page.url()}`)
+  // with no delay the page may leave before its full report does: whichever report settles the visit, it is loud
+  const loud = evs.filter((e) => e.verdict === 'mismatch' && rules(e).split(',').includes('refresh-header'))
+  ok(evs.length > 0 && loud.length === evs.length && loud.some((e) => (e.warned ?? []).includes('tab')), `every report of the visit is a mismatch on the Refresh header, loudly (${evs.map((e) => `${e.early ? 'early' : 'full'} ${e.verdict} ${rules(e)} ${e.warned}`).join(' | ')})`)
+}
+
+if (row('cut-mid-script')) {
+  section('cut-mid-script: the honest library, its script still arriving, left before it ends  (rule: a script cut short that is an exact prefix of the published text is clean)')
+  const t = libDoc.body.toString('utf8')
+  const mid = Buffer.byteLength(t.slice(0, t.indexOf('<script>') + 8 + 2000))
+  await fresh({ lib: both({ body: libDoc.body.subarray(0, mid), headers: libDoc.headers, hold: true }) })
+  const t0 = Date.now()
+  await page.goto(`${LIB}/`, { waitUntil: 'commit' }).catch(() => {})
+  await sleep(1500)
+  await page.goto('about:blank').catch(() => {})
+  await sleep(ORPHAN_WAIT)
+  const ev = (await since(t0)).find((e) => e.url === `${LIB}/`)
+  ok(ev?.verdict === 'incomplete' && (ev.warned ?? []).length === 0 && ev.page?.partial?.length > 1000, `recorded quietly as incomplete, with the script cut short (${ev?.verdict} ${rules(ev)} ${ev?.warned} partial ${JSON.stringify(ev?.page?.partial)})`)
+}
 // --- rows with a service worker ---------------------------------------------------
-const SW_ROWS = ['shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
+const SW_ROWS = ['sw-preload-vary', 'sw-element', 'shadow-root', 'shadow-root-removed', 'sw-honest', 'sw-script-bytes', 'sw-custom-path', 'sw-cache-extra', 'sw-cache-poisoned', 'sw-navigation-only', 'sw-markup', 'sw-size', 'script-rewrite']
 async function withWorker(script, { scope = '/', url = '/sw.js' } = {}) {
   // the rig registers through a page with CSP bypassed (the library's own worker-src names only its /sw.js)
   await page.goto('about:blank')
@@ -687,8 +881,8 @@ const hostileWorker = (pairs, headerEdit = '') => SW_HONEST.replace("e.respondWi
 if (SW_ROWS.some(row)) {
   await page.goto('about:blank')
   if (row('sw-honest')) {
-    section('sw-honest: the precache worker serves release A  (positive control, worker present)')
-    await fresh()
+    section('sw-honest: the fixture precache worker (release F) serves the library  (positive control, a fixture worker present)')
+    await fresh({ list: listF })
     ok(await withWorker(SW_HONEST) === true, 'the fixture worker registered and activated')
     const v = await visit(page, `${LIB}/`, { open: true })
     ok(v.lib?.page.viaWorker === true, 'the navigation was answered by the worker')
@@ -700,7 +894,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-script-bytes')) {
     section('sw-script-bytes: the network now serves a different /sw.js  (rule: worker-bytes)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST + '// changed\n'), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
@@ -709,7 +903,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-custom-path')) {
     section('sw-custom-path: a second worker registered at a path no release lists  (rule: worker)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     needWorker(await withWorker('// a worker at a custom path\n', { url: '/x/sw2.js', scope: '/x/' }))
     // the rig's own setup, checked before the visit: both registrations exist
@@ -723,7 +917,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-cache-extra')) {
     section('sw-cache-extra: an entry no release lists, waiting in the worker\'s cache  (rule: cache)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     const p = await ctx.newPage(); await p.goto(`${LIB}/`)
     await p.evaluate(async () => (await caches.open('bento-home-v1')).put('/later.js', new Response('/* waiting */')))
@@ -734,7 +928,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-cache-poisoned')) {
     section('sw-cache-poisoned: one byte of the cached library page changed; the worker serves it  (rule: cache; nothing repaired)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(SW_HONEST))
     const p = await ctx.newPage(); await p.goto(`${LIB}/`)
     const bad = variant(libDoc, 'Choose a file', 'Choose a filf').body.toString('utf8')
@@ -763,7 +957,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-navigation-only')) {
     section('sw-navigation-only: a hostile worker changes one byte of the script for navigations only; the network /sw.js is honest again  (rule: scripts)')
-    await fresh()
+    await fresh({ list: listF })
     const t = libDoc.body.toString('utf8')
     const at = t.indexOf('<script>') + '<script>'.length + 40
     const from = t.slice(at - 20, at + 20), to = t.slice(at - 20, at) + (t[at] === 'a' ? 'b' : 'a') + t.slice(at + 1, at + 20)
@@ -776,18 +970,18 @@ if (SW_ROWS.some(row)) {
   }
   if (row('sw-markup')) {
     section('sw-markup: a hostile worker swaps page text for an <img onerror> of the same length  (rule: markup)')
-    await fresh()
+    await fresh({ list: listF })
     const from = 'Only the code of signed Bento releases runs here,'
     const to = '<img src=x onerror="1">'.padEnd(from.length, ' ')
     needWorker(await withWorker(hostileWorker([[from, to]])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup', `mismatch on markup only (got ${v.lib?.verdict} ${rules(v.lib)})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && rules(v.lib).replace('elements', '').replace(/^,|,$/g, '') === 'markup', `mismatch on markup (and the element it added) (got ${v.lib?.verdict} ${rules(v.lib)})`)
     await noWorkers()
   }
   if (row('sw-size')) {
     section('sw-size: a hostile worker adds text to the page (no script, no handler)  (rule: size)')
-    await fresh()
+    await fresh({ list: listF })
     needWorker(await withWorker(hostileWorker([['Choose a file', 'Choose a file to send us']])))
     state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
     const v = await visit(page, `${LIB}/`)
@@ -796,7 +990,7 @@ if (SW_ROWS.some(row)) {
   }
   if (row('script-rewrite')) {
     section('script-rewrite: a hostile worker serves a script that runs, then rewrites its own text to the honest one  (rule: script-rewritten)')
-    await fresh()
+    await fresh({ list: listF })
     const t = libDoc.body.toString('utf8')
     const s0 = t.indexOf('<script>') + '<script>'.length, s1 = t.indexOf('</script>', s0)
     const honestJs = t.slice(s0, s1)
@@ -816,14 +1010,28 @@ if (SW_ROWS.some(row)) {
     const v = await visit(page, `${LIB}/`)
     const ran = await page.evaluate((h) => document.querySelector('script')?.textContent === h, honestJs)
     ok(ran, 'the hostile script ran and its text now reads exactly as the honest one')
-    ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup' && v.lib?.page.flags.includes('script-rewritten'), `mismatch: a script rewrote itself (got ${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && v.lib?.page.flags.includes('script-rewritten'), `mismatch: a script rewrote itself (got ${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+    await noWorkers()
+  }
+  if (row('sw-preload-vary')) {
+    section('sw-preload-vary: a listed worker that answers navigations by navigation preload; then one text byte, sent `Vary: *` so the HTTP cache keeps no copy  (rule: bytes unread are waived only when the worker answered from somewhere webRequest did not see)')
+    await fresh({ list: listP })
+    ok(await withWorker(SW_PRELOAD) === true, 'the preload worker registered and activated')
+    const h = await visit(page, `${LIB}/`)
+    ok(h.lib?.verdict === 'ok' && h.lib.page.viaWorker === true && h.lib.page.cspFrom === 'navigation', `positive control: honest, answered by the worker, and webRequest saw the navigation (${h.lib?.verdict} ${rules(h.lib)} viaWorker ${h.lib?.page.viaWorker} cspFrom ${h.lib?.page.cspFrom})`)
+    for (const p of ['/', '/index.html']) state.lib.set(p, variant(libDoc, 'Choose a file', 'Choose a filf', { vary: '*' }))
+    await closeExtras(page)
+    const v = await visit(page, `${LIB}/`)
+    const served = await page.evaluate(() => document.body.innerHTML.includes('Choose a filf')).catch(() => null)
+    ok(served === true && v.lib?.page.viaWorker === true && !v.lib?.observed.bytes, `the changed byte reached the page through the worker, and the cache holds no copy to read (served ${served}, bytes read ${v.lib?.observed.bytes})`)
+    ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('bytes-unread') && (v.lib.warned ?? []).includes('tab'), `a loud mismatch: bytes unread (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.warned})`)
     await noWorkers()
   }
 }
 
 if (row('shadow-root')) {
   section('shadow-root: a hostile worker puts a handler and a script inside a declarative shadow root, same length  (rule: shadow-root is markup)')
-  await fresh()
+  await fresh({ list: listF })
   const t = libDoc.body.toString('utf8')
   const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
@@ -833,13 +1041,13 @@ if (row('shadow-root')) {
   const v = await visit(page, `${LIB}/`)
   const ran = await page.evaluate(() => document.title === 'DSD').catch(() => false)
   ok(ran, 'the hidden handler ran (the attack is real)')
-  ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'markup' && v.lib.page.flags.includes('shadow-root'), `a shadow root is markup (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
+  ok(v.lib?.verdict === 'mismatch' && rules(v.lib).split(',').includes('markup') && v.lib.page.flags.includes('shadow-root'), `a shadow root is markup (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
   await noWorkers()
 }
 
 if (row('shadow-root-removed')) {
   section('shadow-root-removed: a hostile worker streams a declarative shadow root whose script removes its own host, same length  (rule: every element walked is checked for a shadow root)')
-  await fresh()
+  await fresh({ list: listF })
   const t = libDoc.body.toString('utf8')
   const LONG = 'Only the code of signed Bento releases runs here, each document in its own sandbox. Saving changes is not available on this page yet: to edit, open the file in your browser directly or in the Bento app.'
   const meta = /<meta http-equiv="Content-Security-Policy" content="[^"]*">/.exec(t)[0]
@@ -872,6 +1080,122 @@ if (row('shadow-root-removed')) {
   ok(ran && v.lib?.page.viaWorker, 'the hidden script ran under the worker and removed its host (the attack is real)')
   ok(v.lib?.verdict === 'mismatch' && v.lib.page.flags.includes('shadow-root'), `a removed shadow host is still flagged (${v.lib?.verdict} ${rules(v.lib)} ${v.lib?.page.flags})`)
   await noWorkers()
+}
+
+if (row('sw-element')) {
+  section('sw-element: a hostile worker turns page text into an element, same length, no script, no handler  (rule: the element sequence, in the full report)')
+  await fresh({ list: listF })
+  needWorker(await withWorker(hostileWorker([['Only the code', '<b>Only</b> c']])))
+  state.lib.set('/sw.js', { body: Buffer.from(SW_HONEST), headers: { 'content-type': 'text/javascript' } })
+  const v = await visit(page, `${LIB}/`)
+  ok(v.lib?.verdict === 'mismatch' && rules(v.lib) === 'elements', `mismatch on elements only (got ${v.lib?.verdict} ${rules(v.lib)})`)
+  await noWorkers()
+}
+
+
+// --- stage 3: the build's own worker in control (security ruling #954, C1 and C2) -----------------
+// A returning visitor: the library's own /sw.js registered, activated and controlling, with
+// navigation preload on, so webRequest sees each navigation as the tab's own main frame. Then a
+// hostile response, which must reach the page (the positive control in each row) and be a mismatch.
+// The C1 build mutant (TW_BUILD_MUTANT: the worker without navigation preload) turns the rows
+// whose response the HTTP cache keeps no copy of, and the cross-site one, green-for-the-attacker.
+const STAGE3 = ['stage3-honest', 'stage3-index', 'stage3-csp', 'stage3-csp-nostore', 'stage3-vary-text', 'stage3-nostore-text', 'stage3-text', 'stage3-vary-text-index', 'stage3-text-index', 'stage3-cross-site-no-store']
+/** Prime a returning visitor; returns the controlling worker's script URL, or null. */
+async function prime() {
+  await fresh()
+  await page.goto(`${LIB}/`)
+  const ctl = await until(async () => {
+    if (await page.evaluate(() => document.documentElement.getAttribute('data-bento-sw')) !== 'registered') return null
+    return page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return r.active?.state === 'activated' ? r.active.scriptURL : null })
+  }, 20000)
+  await page.goto('about:blank')
+  return ctl
+}
+/** The build's own worker is the one in control of the page (its cache is the build's, never the fixture's). */
+const realWorkerInControl = (p) => p.evaluate(async () => ({
+  controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+  caches: await caches.keys(),
+})).then((r) => (r.controller === `${LIB}/sw.js` && r.caches.includes(infoA.offline.cache) && !r.caches.includes('bento-home-v1') ? true : JSON.stringify(r))).catch((e) => String(e))
+const cspWide = () => libDoc.headers['content-security-policy'].replace(/connect-src [^;]+/, 'connect-src *')
+const textByte = (headers = {}) => variant(libDoc, 'Choose a file', 'Choose a filf', headers)
+const showsFilf = (p) => p.evaluate(() => document.body.innerHTML.includes('Choose a filf')).catch(() => null)
+const ROWS3 = [
+  ['stage3-csp', 'the library CSP widened (connect-src *), bytes identical, cacheable', () => ({ body: libDoc.body, headers: { ...libDoc.headers, 'content-security-policy': cspWide() } }),
+    async (p) => (await p.evaluate(() => 1)) === 1, (r) => r === 'csp'],
+  ['stage3-csp-nostore', 'the library CSP widened, bytes identical, Cache-Control: no-store', () => ({ body: libDoc.body, headers: { ...libDoc.headers, 'cache-control': 'no-store', 'content-security-policy': cspWide() } }),
+    async (p) => (await p.evaluate(() => 1)) === 1, (r) => r.split(',').includes('cache-control') && r.split(',').includes('csp')],
+  ['stage3-vary-text', 'one byte of text, no-cache plus Vary: * (the HTTP cache keeps no copy)', () => textByte({ vary: '*' }), showsFilf, (r) => r.split(',').includes('bytes-unread')],
+  ['stage3-nostore-text', 'one byte of text, Cache-Control: no-store', () => textByte({ 'cache-control': 'no-store' }), showsFilf, (r) => r.split(',').includes('cache-control')],
+  ['stage3-text', 'one byte of text, the headers as shipped', () => textByte(), showsFilf, (r) => r === 'bytes'],
+  // the same two at /index.html, the page's other name, which the worker answers as '/' (security ruling on #964, M1)
+  ['stage3-vary-text-index', 'at /index.html, one byte of text, no-cache plus Vary: *', () => textByte({ vary: '*' }), showsFilf, (r) => r.split(',').includes('bytes-unread'), '/index.html'],
+  ['stage3-text-index', 'at /index.html, one byte of text, the headers as shipped', () => textByte(), showsFilf, (r) => r === 'bytes', '/index.html'],
+]
+if (STAGE3.some(row)) {
+  if (row('stage3-honest')) {
+    section('stage3-honest: a returning visitor, the build\'s own worker in control, the honest release  (positive control: webRequest sees the preload navigation)')
+    const ctl = await prime()
+    ok(ctl === `${LIB}/sw.js`, `the library's own worker is active: ${ctl}`)
+    await fresh({ keepWorkers: true })
+    const v = await visit(page, `${LIB}/`, { open: true })
+    ok(await realWorkerInControl(page) === true, `the build's own worker controls the page, with the build's cache (${await realWorkerInControl(page)})`)
+    ok(v.lib?.verdict === 'ok' && v.lib.page.viaWorker === true && v.lib.page.cspFrom === 'navigation', `ok, answered by the worker, and the CSP came from the navigation webRequest saw (${v.lib?.verdict} ${rules(v.lib)} viaWorker ${v.lib?.page.viaWorker} cspFrom ${v.lib?.page.cspFrom})`)
+    ok(v.lib?.observed.bytes && (v.lib.page.workers ?? []).length === 1, `bytes read, one worker read (${JSON.stringify(v.lib?.observed)}, ${v.lib?.page.workers?.length} worker(s))`)
+    ok(v.frame?.verdict === 'ok', `the frame is unaffected (${v.frame?.verdict})`)
+    // a second visit and a forced update check: still nothing to say (/index.html is stage3-index's)
+    await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.update())).catch(() => {})
+    const v2 = await visit(page, `${LIB}/`)
+    ok(v2.lib?.verdict === 'ok' && v2.lib.page.viaWorker === true, `a second visit after an update check: ok (${v2.lib?.verdict} ${rules(v2.lib)} errors ${JSON.stringify(v2.lib?.page?.errors)})`)
+  }
+  if (row('stage3-index')) {
+    // An honest returning visitor opening /index.html, the library page by its other name, eight times,
+    // each a fresh returning visitor that has never fetched /index.html. Before the worker answered
+    // /index.html as '/', its navigation fell through the worker and the preload response was often not
+    // kept in the HTTP cache: bytes unread, a loud "unverified" tab on an honest page (security measured
+    // 4 in 8). The build mutant that drops that line must turn this row red.
+    section('stage3-index: an honest returning visitor opens /index.html, eight times  (security ruling on #964, M1: no false "unverified")')
+    const tally = {}
+    let read = 0, via = 0
+    for (let i = 0; i < 8; i++) {
+      const ctl = await prime()
+      if (ctl !== `${LIB}/sw.js`) { tally[`no worker (${ctl})`] = (tally[`no worker (${ctl})`] ?? 0) + 1; continue }
+      await fresh({ keepWorkers: true })
+      const v = await visit(page, `${LIB}/index.html`)
+      const k = `${v.lib?.verdict}[${rules(v.lib)}]${(v.lib?.warned ?? []).includes('tab') ? '+tab' : ''}`
+      tally[k] = (tally[k] ?? 0) + 1
+      if (v.lib?.observed?.bytes) read++
+      if (v.lib?.page?.viaWorker === true) via++
+    }
+    ok(via === 8, `every visit was a page the build's own worker controls, so the row ran what it names (${via}/8)`)
+    ok(tally['ok[]'] === 8, `eight honest visits, eight quiet ok verdicts, no tab (${JSON.stringify(tally)})`)
+    ok(read === 8, `the page's bytes were read on every visit (${read}/8)`)
+  }
+  for (const [name, what, make, served, expect, at = '/'] of ROWS3) {
+    if (!row(name)) continue
+    section(`${name}: ${what}, the build's own worker in control  (security ruling #954)`)
+    const ctl = await prime()
+    ok(ctl === `${LIB}/sw.js`, `the library's own worker is active before the row (${ctl})`)
+    await fresh({ keepWorkers: true, lib: both(make()) })
+    const v = await visit(page, `${LIB}${at}`)
+    const s = await served(page)
+    ok(s === true && v.lib?.page.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${v.lib?.page.viaWorker}, cspFrom ${v.lib?.page.cspFrom})`)
+    ok(v.lib?.verdict === 'mismatch' && expect(rules(v.lib)) && (v.lib.warned ?? []).includes('tab'), `a loud mismatch (${v.lib?.verdict} [${rules(v.lib)}] ${v.lib?.warned})`)
+  }
+  if (row('stage3-cross-site-no-store')) {
+    section('stage3-cross-site-no-store: reached by a link from another site, one byte changed and sent no-store, the build\'s own worker in control  (security ruling #954)')
+    const ctl = await prime()
+    ok(ctl === `${LIB}/sw.js`, `the library's own worker is active before the row (${ctl})`)
+    await fresh({ keepWorkers: true, lib: both(textByte({ 'cache-control': 'no-store' })) })
+    state.frame.set('/opener', { body: Buffer.from(`<!doctype html><a id=l href="${LIB}/">link</a>`), headers: { 'content-type': 'text/html' } })
+    await page.goto(`${FRM}/opener`)
+    const t0 = Date.now()
+    await Promise.all([page.waitForURL(`${LIB}/`, { timeout: 20000 }).catch(() => {}), page.click('#l')])
+    const ev = await until(async () => (await since(t0)).find((e) => e.url === `${LIB}/` && !e.early), 40000)
+    const s = await showsFilf(page)
+    ok(s === true && ev?.page?.viaWorker === true, `the hostile response reached the page, through the worker (served ${s}, viaWorker ${ev?.page?.viaWorker})`)
+    ok(ev?.verdict === 'mismatch' && ev.page.crossSite === true && rules(ev).split(',').includes('cache-control'), `a mismatch, seen as cross-site, on its Cache-Control (${ev?.verdict} [${rules(ev)}] crossSite ${ev?.page?.crossSite})`)
+  }
+  await fresh()
 }
 
 ok(sockets.length === 0, `no WebSocket was opened (${sockets.length})`)

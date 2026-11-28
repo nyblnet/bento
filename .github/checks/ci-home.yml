@@ -145,8 +145,9 @@ jobs:
     # The bento/home tripwire in a real browser: the unpacked extension loaded
     # into Playwright's Chromium (channel 'chromium', new headless: the
     # headless shell cannot load extensions), against a local home/web build,
-    # a fixture service worker and a local release channel. Then a mutant per
-    # rule, each of which must turn the row that guards it red.
+    # the build's own service worker (and fixture workers) and a local release
+    # channel. Then a mutant per rule (and per home/web build seam the stage-3
+    # rows depend on), each of which must turn the row that guards it red.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
