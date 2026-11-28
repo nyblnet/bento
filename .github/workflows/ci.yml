@@ -1,8 +1,20 @@
-# CI validation gates — validate, never release.
+# The required check: `validate`, the quick check, on every PR and every push
+# to main. Validate, never release.
 #
-# Every PR and every push to main runs: typecheck, the single-file build,
-# the splice conformance gate (scripts/shell-gate.mjs — same code the local
-# release runs before signing), and the CRDT convergence rig at CI depth.
+# It runs `node scripts/check.mjs --affected HEAD^1`: only what the diff
+# reaches. On a pull request the checkout is GitHub's merge commit, whose first
+# parent is main's tip, so HEAD^1..HEAD is exactly what merging would change;
+# on a push to main it is what the merge changed. scripts/check.mjs says how
+# it chooses (the CI steps themselves, from .github/, by import distance and
+# tier, nearest first, within a time budget) and prints why each step ran and
+# what it left to the sweep. The target is about a minute for a typical PR.
+#
+# This is the ONLY GitHub workflow. Everything it leaves runs locally, in the
+# full check before a release (scripts/sweep.mjs, on the release machine; a
+# release refuses without a green one for its commit). A new rig still goes at
+# the END of its zone's slice, .github/actions/validate-<zone>/action.yml, or in
+# a step list under .github/checks/, never in this file: the check reads it
+# from there.
 #
 # Deliberately absent: signing, publishing, deploying. Releases are cut
 # locally so the signing key never leaves the maintainer's machine and the
@@ -17,184 +29,74 @@ on:
     branches: [main]
 
 concurrency:
-  # PR branches share one group per ref, so a new push collapses onto the tip —
-  # only the tip matters there. Pushes to main get a group PER COMMIT, because
-  # every merge commit is a distinct state and the post-merge run is the safety
-  # net for interaction bugs between PRs merged close together.
-  #
-  # Per-commit, NOT merely cancel-in-progress:false — that setting alone does
-  # not queue every run. GitHub keeps at most ONE pending run per group, so a
-  # third push cancels the PENDING one instead of lining up behind it; it
-  # protects the run in progress, not the queue. Merging 19 PRs in a row that
-  # way cancelled 17 runs on main and left those merge commits unbuilt, and the
-  # "four merges in a few minutes" incident this setting was meant to fix was
-  # the same failure. A unique group per commit is what actually guarantees it.
+  # PR branches share one group per ref, so a new push collapses onto the tip.
+  # Pushes to main get a group PER COMMIT: GitHub keeps at most one pending run
+  # per group, so a shared group cancels queued merge commits instead of
+  # lining them up (docs/DECISIONS.md).
   group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  # Moot on main now — each commit is alone in its group — but kept truthful:
-  # superseded PR-branch runs still collapse.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # The required check is `validate` — the LAST job below, which only reads the
-  # results of the two jobs that do the work. The work is split in two so the
-  # halves run in PARALLEL: as one job it reached 18–20 minutes and was being
-  # cancelled at its 20-minute limit. The kernel slice is the half that splits
-  # off cleanly: it is the longest slice (about seven minutes) and it needs no
-  # app's build — only slides' toolchain (tsc, esbuild), jsdom and the browser.
-  validate-builds:
-    runs-on: ubuntu-latest
-    # The four apps' builds and every slice that reads a built shell.
-    # 20, not 15: the dash slice's release rehearsal boots the release in
-    # Chromium to check its pins (K4), about two minutes.
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          # ≥23.6 required: the sync rig runs TypeScript via native type
-          # stripping (node scripts/test-sync.ts).
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            slides/package-lock.json
-            spaces/package-lock.json
-            dash/package-lock.json
-            type/package-lock.json
-
-      - name: Install
-        working-directory: slides
-        run: npm ci
-
-      - name: Install jsdom for the rigs' DOM halves
-        # Pinned outside the app packages, like the browser runtime in the
-        # ci-<zone>.yml jobs: jsdom is test tooling, never shipped in a document.
-        # The encrypted-title, type preview and type font rigs import it from
-        # the repo root. Until this step existed they skipped in every run.
-        run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
-
-      - name: Install browser test runtime (the release rehearsal checks pins)
-        # release.mjs refuses to sign without checking the release's pins in a
-        # real browser (scripts/derive-pins.mjs, K4), and the dash slice runs
-        # that real pipeline as its release rehearsal. Pinned outside the app
-        # packages, as in the ci-<zone>.yml browser jobs.
-        run: |
-          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
-          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
-          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-
-      - name: Rig steps fail on a skip
-        # Puts scripts/ci on PATH, so every slice step below can declare
-        # `shell: bento-step {0}`: a rig that reports a skip CI does not allow
-        # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
-        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
-
-      # Everything below is THIS job — half of the required `validate` check —
-      # run as composite actions, one per zone, each in
-      # .github/actions/validate-<zone>/action.yml. They run in this order on
-      # this runner, so a slice can use whatever the slices before it installed
-      # and built: each app slice builds its own shell, and the slices after
-      # the apps (convert, home, shared) can rely on all four shells. The
-      # kernel slice is the other half, in validate-kernel below.
-      #
-      # A new rig goes at the END of its own zone's slice, never in this file:
-      # this file used to hold every step, and every zone appending at the
-      # same few anchors made nearly every open PR conflict with the next
-      # merge. This list changes only when a slice is added.
-      #
-      # A zone's jobs that are NOT part of the required check live in
-      # .github/workflows/ci-<zone>.yml, each job id unchanged.
-      - name: validate (slides)
-        uses: ./.github/actions/validate-slides
-
-      - name: validate (spaces)
-        uses: ./.github/actions/validate-spaces
-
-      - name: validate (dash)
-        uses: ./.github/actions/validate-dash
-
-      - name: validate (type)
-        uses: ./.github/actions/validate-type
-
-      - name: validate (convert)
-        uses: ./.github/actions/validate-convert
-
-      - name: validate (home-ios)
-        uses: ./.github/actions/validate-home-ios
-
-      - name: validate (home)
-        uses: ./.github/actions/validate-home
-
-      - name: validate (home-webext)
-        uses: ./.github/actions/validate-home-webext
-
-      - name: validate (shared)
-        uses: ./.github/actions/validate-shared
-
-  validate-kernel:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            slides/package-lock.json
-            spaces/package-lock.json
-            dash/package-lock.json
-            type/package-lock.json
-
-      - name: Install
-        # slides' toolchain: the kernel typecheck runs its tsc, and several
-        # kernel rigs are bundled with its esbuild.
-        working-directory: slides
-        run: npm ci
-
-      - name: Install jsdom for the rigs' DOM halves
-        # The same pin as validate-builds: the kernel's encrypted-title rig
-        # imports it from the repo root.
-        run: npm install --prefix "$GITHUB_WORKSPACE" --no-save --no-package-lock --no-audit --no-fund jsdom@25.0.1
-
-      - name: Install browser test runtime
-        # The same pinned runtime as validate-builds: the kernel's disk-change
-        # browser rig reads PLAYWRIGHT_MODULE.
-        run: |
-          npm install --prefix "$RUNNER_TEMP/bento-browser" --no-package-lock --ignore-scripts playwright@1.61.1
-          "$RUNNER_TEMP/bento-browser/node_modules/.bin/playwright" install --with-deps chromium
-          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-
-      - name: Rig steps fail on a skip
-        # Puts scripts/ci on PATH, so every slice step below can declare
-        # `shell: bento-step {0}`: a rig that reports a skip CI does not allow
-        # fails its step. Reasoning and allowlist: scripts/lib/ci-skips.mjs.
-        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
-
-      # The kernel slice runs ALONE on this runner: no app is built here, so a
-      # kernel rig that starts reading a built shell must move to
-      # validate-builds (or build what it reads in its own step).
-      - name: validate (kernel)
-        uses: ./.github/actions/validate-kernel
-
-  # THE REQUIRED CHECK. Branch protection requires a check named `validate`, so
-  # this job keeps that name and passes only when BOTH halves succeeded. It must
-  # run with `always()`: a job skipped because a dependency failed or was
-  # cancelled reports "skipped", and a skipped required check counts as passing
-  # — the hole that made an aggregator the wrong shape before (docs/DECISIONS.md,
-  # 2026-10-18). Here a failed, cancelled or skipped half fails `validate`.
+  # THE REQUIRED CHECK. Branch protection requires a check named `validate`.
   validate:
     runs-on: ubuntu-latest
-    needs: [validate-builds, validate-kernel]
-    if: always()
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
-      - name: Both halves passed
-        env:
-          BUILDS: ${{ needs.validate-builds.result }}
-          KERNEL: ${{ needs.validate-kernel.result }}
+      - uses: actions/checkout@v4
+        with:
+          # the merge commit and its first parent: the diff the check plans from
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          # ≥23.6 required: rigs run TypeScript via native type stripping.
+          node-version: 24
+
+      - name: Restore the apps' node_modules
+        # Keyed exactly by the lockfiles (no fallback: a stale node_modules
+        # would pass a check against the wrong dependencies).
+        id: deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            slides/node_modules
+            spaces/node_modules
+            dash/node_modules
+            type/node_modules
+          key: deps-${{ runner.os }}-node24-${{ hashFiles('slides/package-lock.json', 'spaces/package-lock.json', 'dash/package-lock.json', 'type/package-lock.json') }}
+
+      - name: Install the apps' node_modules (only when the lockfiles changed)
+        if: steps.deps.outputs.cache-hit != 'true'
         run: |
-          echo "validate-builds: $BUILDS"
-          echo "validate-kernel: $KERNEL"
-          [ "$BUILDS" = success ] && [ "$KERNEL" = success ]
+          # (each install's own status: a bare `wait` returns 0 whatever failed)
+          pids=()
+          for app in slides spaces dash type; do npm ci --prefix "$app" --no-audit --no-fund & pids+=($!); done
+          for p in "${pids[@]}"; do wait "$p"; done
+
+      - name: Restore the pinned browser
+        # Playwright and its Chromium, installed by the check only when a step
+        # it runs drives a browser; keyed by the file that pins the version.
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ${{ runner.temp }}/bento-browser
+          key: browser-${{ runner.os }}-${{ hashFiles('.github/checks/ci-full.yml') }}
+
+      - name: Restore the check's result cache
+        # Content-keyed passes (scripts/lib/check-cache.mjs) and built shells:
+        # a rerun skips what did not change. Saved under a new key every run;
+        # restored from the newest of this branch or main. (actions/cache
+        # refuses a path with `..` in it, and then silently saves nothing.)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bento-check-cache
+          key: check-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            check-${{ runner.os }}-
+
+      - name: Quick check
+        env:
+          BENTO_CHECK_CACHE: ${{ runner.temp }}/bento-check-cache
+          BENTO_BROWSER_DIR: ${{ runner.temp }}/bento-browser
+        run: node scripts/check.mjs --affected HEAD^1 --logs "$RUNNER_TEMP/check-logs"
