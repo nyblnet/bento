@@ -372,14 +372,17 @@ async function runStep(c) {
   return report(c, { status, ms: r.ms, note, out: r.out, log })
 }
 
-/** Launch the system Chrome once (the same one the rigs find), so a timing rig never meets a cold first launch. */
+/**
+ * Launch the system Chrome once (the same one the rigs find) on a page with
+ * text, so a timing rig never meets a cold first launch or a cold font cache.
+ */
 let warmed = null
 function warmChrome() {
   if (!warmed) {
     const chrome = [process.env.BENTO_CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => p && existsSync(p))
     const profile = mkdtempSync(join(tmpdir(), 'bento-warm-'))
     warmed = chrome
-      ? run(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, '--dump-dom', 'about:blank'], { timeout: 60_000 }).then(() => rmSync(profile, { recursive: true, force: true, maxRetries: 10 }))
+      ? run(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, '--dump-dom', `data:text/html,${encodeURIComponent('<!doctype html><meta charset=utf-8><body style="font-family:system-ui,sans-serif">Warm <b>up</b> <i>text</i> <code>code</code> 日本語 한국어 العربية</body>')}`], { timeout: 60_000 }).then(() => rmSync(profile, { recursive: true, force: true, maxRetries: 10 }))
       : Promise.resolve()
   }
   return warmed
