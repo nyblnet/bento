@@ -20,8 +20,7 @@
 // - Where: a detached worktree, BENTO_SWEEP_WORKTREES/<name> (default
 //   ~/personal/bento-wt/sweep/main), reused from sweep to sweep and cleaned
 //   (git clean -fdx, node_modules kept) before each; one sweep at a time per
-//   worktree. node_modules: linked from the main checkout when its lockfile
-//   matches the commit's, else installed there.
+//   worktree. node_modules: its own, npm ci'd, kept while the lockfile holds.
 // - Results: <BENTO_CHECK_CACHE, default ~/personal/bento-check-cache>/sweeps/<sha>.json
 //     { sha, ok, finished, subject, seconds, counts, failures: [{ id, label, note }],
 //       skipped, notHere, logs, firstBad }
@@ -38,7 +37,7 @@
 //   --jobs N        steps at once (passed to check.mjs)
 
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,8 +102,6 @@ export async function bisect(commits, isBad) {
 
 // ---------------------------------------------------------------- the worktree
 
-const mainCheckout = () => dirname(resolve(ROOT, git(['rev-parse', '--git-common-dir'])))
-
 /** The sweep's worktree at `sha`, cleaned, with node_modules for every app. */
 function worktreeAt(name, sha) {
   const dir = join(WT_ROOT, name)
@@ -116,20 +113,20 @@ function worktreeAt(name, sha) {
     git(['checkout', '--detach', '--force', sha], dir)
     git(['clean', '-fdxq', '-e', 'node_modules'], dir)
   }
-  const main = mainCheckout()
+  // Its own installs, never another checkout's: a matching lockfile does not
+  // mean that checkout's node_modules was installed from it (a stale one
+  // lacked @gfx/zopfli). Kept between sweeps while the lockfile is the same.
   for (const a of APPS) {
     const to = join(dir, a, 'node_modules')
-    const from = join(main, a, 'node_modules')
-    const same = existsSync(from) && existsSync(join(main, a, 'package-lock.json')) && existsSync(join(dir, a, 'package-lock.json')) &&
-      readFileSync(join(main, a, 'package-lock.json'), 'utf8') === readFileSync(join(dir, a, 'package-lock.json'), 'utf8')
+    const lockFile = join(dir, a, 'package-lock.json')
+    if (!existsSync(lockFile)) continue
+    const lock = readFileSync(lockFile, 'utf8')
+    const marker = join(to, '.bento-sweep-lock')
     let isLink = false
     try { isLink = lstatSync(to).isSymbolicLink() } catch { /* missing */ }
-    const marker = join(to, '.bento-sweep-lock')
-    const lock = existsSync(join(dir, a, 'package-lock.json')) ? readFileSync(join(dir, a, 'package-lock.json'), 'utf8') : ''
-    if (isLink && (!same || readlinkSync(to) !== from)) { rmSync(to, { force: true }); isLink = false }
-    if (!isLink && existsSync(to) && (!existsSync(marker) || readFileSync(marker, 'utf8') !== lock)) rmSync(to, { recursive: true, force: true })
-    if (!existsSync(to) && same) symlinkSync(from, to)
-    if (!existsSync(to) && existsSync(join(dir, a, 'package-lock.json'))) {
+    if (isLink) rmSync(to, { force: true })
+    else if (existsSync(to) && (!existsSync(marker) || readFileSync(marker, 'utf8') !== lock)) rmSync(to, { recursive: true, force: true })
+    if (!existsSync(to)) {
       execFileSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: join(dir, a), stdio: 'ignore' })
       writeFileSync(marker, lock)
     }
