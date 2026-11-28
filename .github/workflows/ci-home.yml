@@ -196,13 +196,21 @@ jobs:
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/bento-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       # each engine and the mutants report on their own: one failing does not
       # skip the others (the job still fails), and a hang ends its step, not the job
+      # WebKit keeps retry-once for one named engine fault: about 1 run in 30,
+      # Playwright's WebKit drops the origin's worker registration AND its
+      # cache mid-run, under an unchanged status, after a GLib/libsoup
+      # CRITICAL in a browser child process (pw:browser below logs it). The
+      # row still fails on that run; the retry is what lets the job pass.
+      # Tracked in issue #999.
+      # Firefox runs once: its hang (Juggler losing a new page's main world)
+      # is handled in the rig, which notes each page it had to replace.
       - name: home/web stage 3 in WebKit
         timeout-minutes: 8
-        run: BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-offline.mjs
+        run: DEBUG=pw:browser BENTO_BROWSER=webkit scripts/ci/retry-once node scripts/test-home-web-offline.mjs
       - name: home/web stage 3 in Firefox
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: BENTO_BROWSER=firefox scripts/ci/retry-once node scripts/test-home-web-offline.mjs
+        run: BENTO_BROWSER=firefox node scripts/test-home-web-offline.mjs
       - name: home/web stage 3 mutants
         if: ${{ !cancelled() }}
         timeout-minutes: 12

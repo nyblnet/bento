@@ -64,17 +64,19 @@
 // passkey there, and then waits 72 hours like any change, with its own void
 // link. It preempts whatever change is waiting. In the account's first 14 days
 // no member may stop it (so whoever set the account up without the mailbox
-// cannot keep the address); after that a member may. When it takes effect the
-// roster is that one new passkey, under the word `r`.
+// cannot keep the address); after that a member may, with its passkey over
+// the kernel's `vrs.` text (resetVoid). The age is judged at the reset's FIRST
+// request: an undo that asks the reset again (C3) never makes a young reset
+// stoppable. When it takes effect the roster is that one new passkey, under
+// the word `r`.
 //
-// NOT HERE YET (each a later change): a member stopping a reset with a
-// passkey (the route and its rules are here and refuse at the last step:
-// what the passkey signs is a kernel layout, not defined yet); consent-key and
-// recovery-key members; account deletion; the chain route peers read.
+// NOT HERE YET (each a later change): consent-key and recovery-key members
+// (a reset stop by one is refused by name until their proofs are wired);
+// account deletion; the chain route peers read.
 
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
-import { buildRip, buildRos, parseRos, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
-import { HOME_ORIGIN, PASSKEY, verifyMemberAssertion, verifyRegistration } from './passkey.js'
+import { buildRip, buildRos, parseRos, verifyResetStop, verifyRosterChain, ROSTER_WAIT_MS } from '../../../kernel/src/roster.ts'
+import { HOME_ORIGIN, PASSKEY, passkeyOrigins, verifyMemberAssertion, verifyRegistration } from './passkey.js'
 import { BROWSER_OPS, browserOp } from './browsers.js'
 import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
 import { resetLink, setupLink, voidLink } from './links.js'
@@ -130,6 +132,14 @@ export const ROSTER_LIMITS = {
   holdMs: MAIL_TIMEOUT_MS + 5_000,
   /** F2: how many ended void links the directory remembers, to answer "too late" or "already used" for them */
   endedKeep: 16,
+  /**
+   * RETENTION (the privacy notice states each one). How long an ended void
+   * link's hash is kept to answer "too late" or "already used"; past it the
+   * link answers like one the directory never knew
+   */
+  endedKeepMs: 31 * DAY,
+  /** how long a setup link's send time is kept for the budget: its window (ten in 31 days), never longer */
+  setupTimesKeepMs: 31 * DAY,
 }
 
 /** The openers the sign-in host may report (it reads them from the message event). */
@@ -178,6 +188,27 @@ async function countersign(env, r) {
   return { rip, ripSig: await signStatement(signer.key, rip) }
 }
 
+/**
+ * The directory's own public keys, by kid, as a peer pins them: the online
+ * key's public half, and any earlier key DIR_PUBKEYS lists as {kid, pub}
+ * (after a rotation the chain still carries links the old key signed).
+ */
+async function directoryKeys(env) {
+  const jwk = JSON.parse(env.DIR_KEY_JWK)
+  const pub = await crypto.subtle.importKey('jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify'])
+  const keys = { [env.DIR_KID]: b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', pub))) }
+  let more = []
+  try { more = JSON.parse(env.DIR_PUBKEYS || '[]') } catch { /* none */ }
+  for (const k of Array.isArray(more) ? more : []) if (k && typeof k.kid === 'string' && typeof k.pub === 'string' && !Object.hasOwn(keys, k.kid)) keys[k.kid] = k.pub
+  return keys
+}
+
+/** An assertion's signature counter (authenticator data bytes 33-36), or null when it does not read. */
+function signCountOf(assertion) {
+  const ad = assertion && typeof assertion.authenticatorData === 'string' ? b64uDec(assertion.authenticatorData) : null
+  return ad && ad.length >= 37 ? ((ad[33] << 24) >>> 0) + (ad[34] << 16) + (ad[35] << 8) + ad[36] : null
+}
+
 /** When a `spent:<issued16>:<nonce>` key may go. */
 const spentUntil = (k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs
 
@@ -206,8 +237,17 @@ async function rosterLines(members, records, pendingAdd) {
  * sent never waits to take effect (security's D1).
  */
 async function notify(env, to, subject, lines, kind = 'roster') {
+  return (await notifyHow(env, to, subject, lines, kind)) === 'sent'
+}
+/**
+ * As notify, but says how a send ended: 'sent', 'refused', or 'timeout'. A
+ * timeout is not a refusal: the mailer may still deliver the mail after the
+ * directory stopped waiting, so whoever reports it must not say it was not
+ * sent (security's C8 on #952).
+ */
+async function notifyHow(env, to, subject, lines, kind = 'roster') {
   const body = [...lines, '', 'Bento will never ask you to type or paste anything from this email.'].join('\n')
-  try { await deliver(env, { to, subject, body, kind }); return true } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return false }
+  try { await deliver(env, { to, subject, body, kind }); return 'sent' } catch (e) { console.log(`${kind} mail failed: ${e.message}`); return e && e.code === 'timeout' ? 'timeout' : 'refused' }
 }
 
 /** "the passkey 1a2b3c4d, added 2026-11-03 09:00:00 UTC at setup": a member by its short name and age (G4c). */
@@ -286,10 +326,13 @@ export class Roster {
   constructor(state, env) { this.state = state; this.env = env }
 
   /**
-   * One alarm, two users: a waiting change's ripening, and sweeping spent
+   * One alarm, three users: a waiting change's ripening, sweeping spent
    * challenges once nobody is spending (a stranger's spends on an address that
-   * then goes quiet would otherwise stay stored for good). Each run does what is
-   * due and sets the alarm for the earliest thing still to come.
+   * then goes quiet would otherwise stay stored for good), and RETENTION: the
+   * setup send times, the setup and reset link hashes and the ended void
+   * links each go when their time is up (purge), on an address nobody asks
+   * about again too. Each run does what is due and sets the alarm for the
+   * earliest thing still to come.
    */
   async alarm() {
     const s = this.state.storage
@@ -297,6 +340,8 @@ export class Roster {
     await this.ripen(now)
     await this.sweepSpent(now)
     const next = []
+    const kept = await this.purge(now)
+    if (kept !== null) next.push(kept)
     const p = await s.get('pend')
     // a held change comes due again once the hold is off (released early, a later run of ripen does it)
     const h = await this.held(now)
@@ -310,6 +355,31 @@ export class Roster {
     const s = this.state.storage
     const at = await s.getAlarm()
     if (at === null || at === undefined || at > t) await s.setAlarm(t)
+  }
+
+  /**
+   * RETENTION: delete what is kept only for a while, once its time is up, and
+   * answer when the next thing kept becomes due (null: nothing). An expired
+   * setup or reset link's hash goes at its expiry; an ended void link's hash
+   * endedKeepMs after it ended; a setup send time setupTimesKeepMs after it
+   * (pruneSetupTimes). Every write of these keys brings the alarm forward to
+   * its own time (schedule), never later.
+   */
+  async purge(now) {
+    const s = this.state.storage
+    const due = []
+    const keep = async (key, alive, at) => {
+      const list = (await s.get(key)) || []
+      const left = list.filter(alive)
+      if (left.length !== list.length) { if (left.length) await s.put(key, left); else await s.delete(key) }
+      for (const x of left) due.push(at(x))
+    }
+    await keep('setupTok', (t) => t.exp > now, (t) => t.exp)
+    await keep('resetTok', (t) => t.exp > now, (t) => t.exp)
+    await keep('ended', (e) => now - e.at < ROSTER_LIMITS.endedKeepMs, (e) => e.at + ROSTER_LIMITS.endedKeepMs)
+    const oldest = await this.pruneSetupTimes(now)
+    if (oldest !== null) due.push(oldest + ROSTER_LIMITS.setupTimesKeepMs)
+    return due.length ? Math.min(...due) : null
   }
 
   /** Delete every spent challenge past its keep, oldest first (the keys sort by issue time). */
@@ -380,10 +450,11 @@ export class Roster {
     const list = ((await s.get('ended')) || []).filter((e) => e.h !== h)
     list.push({ h, why, at, ...(by ? { by } : {}) })
     await s.put('ended', list.slice(-ROSTER_LIMITS.endedKeep))
+    await this.schedule(at + ROSTER_LIMITS.endedKeepMs) // retention: purge deletes it then
   }
-  /** The answer for a token whose link has ended, or null when the directory does not know it. */
-  async endedAnswer(th) {
-    const e = ((await this.state.storage.get('ended')) || []).find((x) => same(x.h, th))
+  /** The answer for a token whose link has ended, or null when the directory does not know it (or ended it longer ago than the keep). */
+  async endedAnswer(th, now) {
+    const e = ((await this.state.storage.get('ended')) || []).find((x) => same(x.h, th) && now - x.at < ROSTER_LIMITS.endedKeepMs)
     return e ? { error: e.why, at: e.at, ...(e.by ? { by: e.by } : {}) } : null
   }
 
@@ -395,12 +466,26 @@ export class Roster {
    */
   async spendSetupBudget(now) {
     const s = this.state.storage
-    const times = ((await s.get('mail')) || []).filter((t) => now - t < 31 * DAY)
+    const times = ((await s.get('mail')) || []).filter((t) => now - t < ROSTER_LIMITS.setupTimesKeepMs)
     if (times.length && now - times[times.length - 1] < ROSTER_LIMITS.mailCooldownMs) return false
     if (times.filter((t) => now - t < DAY).length >= ROSTER_LIMITS.mailPerDay) return false
     if (times.length >= ROSTER_LIMITS.mailPerMonth) return false
     await s.put('mail', [...times, now])
+    await this.schedule((times[0] ?? now) + ROSTER_LIMITS.setupTimesKeepMs) // retention: the oldest kept time goes then
     return true
+  }
+  /**
+   * RETENTION for the budget's send times (only purge calls it): drop every
+   * time the budget no longer reads (older than its 31-day window), deleting
+   * the key when none is left, setup or not. It only deletes, so it never
+   * changes what the budget allows. Answers the oldest time kept, or null.
+   */
+  async pruneSetupTimes(now) {
+    const s = this.state.storage
+    const times = (await s.get('mail')) || []
+    const left = times.filter((t) => now - t < ROSTER_LIMITS.setupTimesKeepMs)
+    if (left.length !== times.length) { if (left.length) await s.put('mail', left); else await s.delete('mail') }
+    return left.length ? Math.min(...left) : null
   }
 
   async records(members) {
@@ -412,6 +497,34 @@ export class Roster {
   /** When the account was set up: the setup head's time, which a reset does not change (G5). */
   async createdAt(cur) {
     return cur.createdAt ?? (await this.state.storage.get('link:00000000'))?.ripenedAt ?? cur.ripenedAt
+  }
+
+  /** The stored chain, setup first, as kernel RosterLink objects. */
+  async storedChain() {
+    return [...(await this.state.storage.list({ prefix: 'link:' })).values()].map((l) => {
+      const out = { ros: l.ros, rip: l.rip, ripSig: l.ripSig }
+      if (l.kind === 'member') { out.signer = l.signer; out.assertion = l.assertion }
+      if (l.voided) out.voided = l.voided
+      return out
+    })
+  }
+
+  /**
+   * A member's vrs. stops the waiting reset `p`, as its void link's Cancel
+   * does (the void op): the reset is dropped, a removal it set aside waits
+   * again at its own time with its undo link (C3), and the reset's own link
+   * answers how it ended. Returns the removal put back, or null.
+   */
+  async stopReset(p, now, why) {
+    const s = this.state.storage
+    await s.delete('pend')
+    const back = p.parked ?? null
+    if (back) {
+      await s.put('pend', back)
+      await this.schedule(back.ripensAt)
+    }
+    await this.ended(p.voidTok, why, now)
+    return back
   }
 
   /**
@@ -573,6 +686,7 @@ export class Roster {
       const exp = now + (spent ? ROSTER_LIMITS.setupTtlMs : ROSTER_LIMITS.setupBeyondTtlMs)
       // a new token never replaces an older live one: a stranger's start must not kill the owner's link
       await s.put('setupTok', [...live, { h, exp, at: now, mailed: false }])
+      await this.schedule(exp) // retention: an unused link's hash goes at its expiry
       const sent = await mailSetupLink(this.env, a.address, token, now, exp)
       const after = ((await s.get('setupTok')) || []).filter((t) => t.exp > now)
       // a link that never went out is withdrawn, so it can never hold a later mail back
@@ -745,7 +859,7 @@ export class Roster {
       if (!parked && (!p || typeof p.voidTok !== 'string' || !same(p.voidTok, th))) {
         // F2: a link whose life has ended says how (too late, already used, or
         // cancelled by a reset), so the page never has to guess
-        const e = await this.endedAnswer(th)
+        const e = await this.endedAnswer(th, now)
         return e ? out(409, e) : out(400, { error: 'invalid' })
       }
       const kind = parked ? 'removal' : p.kind ?? 'member'
@@ -804,7 +918,8 @@ export class Roster {
           const ros = buildRos({ address, seq: head.seq + 1, prev: head.hash, members: was.members, dirNonce: was.dirNonce, created: now })
           resetAt = now + ROSTER_WAIT_MS
           const { parked: _set, ...reset } = p
-          await s.put('pend', { ...reset, ros, hash: await sha256b64u(ros), requestedAt: now, ripensAt: resetAt })
+          // C4′: the re-ask keeps the reset's FIRST request time, which a member's stop judges the account's age by
+          await s.put('pend', { ...reset, ros, hash: await sha256b64u(ros), requestedAt: now, ripensAt: resetAt, firstRequestedAt: p.firstRequestedAt ?? p.requestedAt })
           await this.schedule(resetAt)
         } else {
           await s.delete('pend')
@@ -837,7 +952,7 @@ export class Roster {
       const removesAt = now + ROSTER_WAIT_MS
       const ut = await mintToken('void')
       const hold = await this.takeHold(now, 'remove')
-      const sent = await notify(this.env, address, 'A passkey on your bento/id account was suspended', [
+      const sent = await notifyHow(this.env, address, 'A passkey on your bento/id account was suspended', [
         `At ${when(now)} the link in an email cancelled the change asked for at ${when(p.requestedAt)}, and suspended ${await named(target, records[target])}, which asked for it.`,
         `That passkey can no longer be used. It will be removed from this account at ${when(removesAt)}.`,
         '',
@@ -846,9 +961,10 @@ export class Roster {
         '',
         ...voidLines(address, ut.token, 'u', removesAt),
       ], 'void')
-      if (!sent) {
+      if (sent !== 'sent') {
         await this.dropHold(hold)
-        return out(503, { error: 'mail' })
+        // C8: a send that timed out may still arrive, so the page must not say it was not sent
+        return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })
       }
       // the hold covers a send the mailer's timeout ends; past it (the object
       // stalled), act only if the change the page stopped is still the one
@@ -856,7 +972,7 @@ export class Roster {
       const still = await s.get('pend')
       const atHead = await s.get('head')
       const mine = (await s.get('hold'))?.id === hold
-      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th)) ?? { error: 'superseded' }) }
+      if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th, now)) ?? { error: 'superseded' }) }
       if (!mine) return out(409, { error: 'busy' })
       await this.link(qRos, { auth: 'q', cause: p.hash, requestedAt: now, now, kind: 'quarantine',
         extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })
@@ -888,6 +1004,7 @@ export class Roster {
       const rt = await mintToken('reset')
       const rexp = now + ROSTER_LIMITS.resetTtlMs
       await s.put('resetTok', [...rlive, { h: rt.h, exp: rexp, at: now, mailed: false }])
+      await this.schedule(rexp) // retention: an unused link's hash goes at its expiry
       const sent = await mailResetLink(this.env, a.address, rt.token, now, rexp)
       const rafter = ((await s.get('resetTok')) || []).filter((t) => t.exp > now)
       await s.put('resetTok', sent ? rafter.map((t) => (t.h === rt.h ? { ...t, mailed: true } : t)) : rafter.filter((t) => t.h !== rt.h))
@@ -963,7 +1080,7 @@ export class Roster {
       await s.put('pend', {
         kind: 'reset', ros, hash: await sha256b64u(ros), change: { op: 'reset', pub: reg.value.pub },
         reg: { credId: reg.value.credId, signCount: reg.value.signCount, origin: reg.value.origin },
-        requestedAt: now, ripensAt: resetAt, mailed: true, voidTok: vt.h, voidKind: 'r', os: origin, rq: '', co: reg.value.origin, how,
+        requestedAt: now, firstRequestedAt: now, ripensAt: resetAt, mailed: true, voidTok: vt.h, voidKind: 'r', os: origin, rq: '', co: reg.value.origin, how,
         ...(setAside ? { parked: setAside } : there ? { preempted: { requestedAt: there.requestedAt } } : {}),
       })
       await s.delete('resetTok') // a reset under way ends every reset link: each is single use
@@ -975,22 +1092,56 @@ export class Roster {
     }
 
     if (a.op === 'resetVoid') {
-      // G5: a member stopping a reset with its passkey, allowed only once the
-      // account is 14 days old (before that, whoever set it up without the
-      // mailbox could keep the address). The rules are checked in order; the
-      // last step, the passkey's signature, waits for the kernel to define the
-      // statement it signs, so for now every request that reaches it is refused.
+      // G5: a member stopping a reset with its passkey, over the kernel's `vrs.`
+      // text (security's C5 on #944). Allowed only for a reset FIRST asked once
+      // the account was 14 days old (C4, C4′): before that, whoever set it up
+      // without the mailbox could keep the address, and an undo that asks the
+      // reset again must not make a young reset stoppable.
       if (!(await spend())) return out(400, { error: 'nonce' })
       await this.ripen(now)
       const p = await s.get('pend')
       if (!p || p.kind !== 'reset') return out(409, { error: 'no-reset' })
       const cur = await s.get('head')
-      if (now - (await this.createdAt(cur)) < ROSTER_LIMITS.newAccountMs) return out(403, { error: 'new-account' })
+      const createdAt = await this.createdAt(cur)
+      // the directory judges the age by the FIRST request; the kernel then checks its own rules on the re-asked one
+      const first = p.firstRequestedAt ?? p.requestedAt
+      if (first - createdAt < ROSTER_LIMITS.newAccountMs) return out(403, { error: 'new-account' })
       const pub = typeof a.credId === 'string' ? await s.get(`cid:${a.credId}`) : undefined
       const who = pub ? cur.members.find((m) => m.pub === pub) : undefined
       if (!who) return out(400, { error: 'signer' })
       if (who.quarantined) return out(403, { error: 'quarantined' })
-      return out(501, { error: 'not-implemented', reason: 'the kernel statement a passkey signs to stop a reset is not defined yet' })
+      // a recovery key's or a consent key's stop needs proofs not wired here yet: refused by name
+      if (who.kind !== 'pk') return out(400, { error: 'signer-kind' })
+      // F1: another press's mail is going out, and what it says must stay true
+      if (await this.held(now)) return out(409, { error: 'busy' })
+      const rec = await s.get(`pk:${who.pub}`)
+      const count = signCountOf(a.assertion)
+      if (!rec || count === null) return out(400, { error: 'assertion' })
+      const chain = await verifyRosterChain(await this.storedChain(), { directoryKeys: await directoryKeys(this.env), rpId: PASSKEY.rpId, origins: passkeyOrigins(), now })
+      if (!chain.ok) throw new Error(`the stored chain does not verify: ${chain.reason}`) // never: the directory countersigned every link
+      // the challenge was spent first, so the kernel is told it spends; one verifier, no second check beside it
+      const v = await verifyResetStop(a.text, who.pub, { assertion: a.assertion }, {
+        roster: chain.value, resetRos: p.ros, resetRequestedAt: p.requestedAt, challenge: a.dirNonce, spend: () => true,
+        rpId: PASSKEY.rpId, origins: passkeyOrigins(), now,
+      })
+      if (!v.ok) return out(v.reason === 'new-account' || v.reason === 'quarantined' ? 403 : 400, { error: v.reason })
+      // D6: the kernel's proof does not compare signature counters; the directory does, in this same step
+      if ((count !== 0 || rec.signCount !== 0) && count <= rec.signCount) return out(400, { error: 'assertion-sign-count' })
+      await s.put(`pk:${who.pub}`, { ...rec, signCount: count })
+      const back = await this.stopReset(p, now, 'stopped')
+      const records = await this.records(cur.members)
+      const address = (await parseRos(cur.ros)).value.address
+      await this.log({ k: 'reset-stop', at: now, seq: cur.seq + 1, pub: p.change.pub, by: who.pub, os: origin, rq: '', co: '' })
+      await notify(this.env, address, 'The reset of your bento/id account was stopped', [
+        `At ${when(now)} ${await named(who.pub, records[who.pub])} stopped the reset asked for at ${when(first)}. The reset's new passkey was not added.`,
+        ...(p.preempted ? [`The change that was waiting when the reset was asked for, asked for at ${when(p.preempted.requestedAt)}, stays cancelled. Ask for it again if you still want it.`] : []),
+        ...(back ? [`The removal of the suspended ${await named(back.change.pub, records[back.change.pub])}, which the reset had set aside, is waiting again: it takes effect at ${when(Math.max(back.ripensAt, now))}. The link in the email that said it was suspended can still put it back until then.`] : []),
+        'If you asked for this reset because you lost every passkey, someone who holds one of them stopped it: ask for another reset only from a device you trust, and check the passkeys below.',
+        '',
+        'The passkeys on this account:',
+        ...(await rosterLines(cur.members, records, null)),
+      ])
+      return out(200, { done: 'stopped', ...(back ? { removesAt: Math.max(back.ripensAt, now) } : {}) })
     }
 
     if (a.op === 'logQuery') {

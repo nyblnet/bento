@@ -150,3 +150,16 @@ runs:
       # WebKit, Firefox and the mutants run in ci-home.yml (home-web-offline-engines).
       shell: bento-step {0}
       run: node scripts/test-home-web-offline.mjs
+
+    - name: home status signer rig
+      # The kill switch's status (sign-home-status.mjs) is signed from the
+      # tripwire's release list (served.json), the one source of what is
+      # withdrawn: a status that disagrees with the list is refused, nothing
+      # written. Two real development builds, throwaway keys.
+      shell: bento-step {0}
+      run: node scripts/test-home-status-sign.mjs
+
+    - name: home status signer mutants
+      # Each refusal turned off in a copy of the signer must turn its row red.
+      shell: bento-step {0}
+      run: node scripts/test-home-status-sign.mjs --mutants
