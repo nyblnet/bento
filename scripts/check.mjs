@@ -383,7 +383,7 @@ const leftovers = []
 
 function report(c, r) {
   const s = c.step
-  const res = { id: s.id, job: s.job, name: s.name, label: label(s), tier: s.tier.tier, status: r.status, ms: r.ms, note: r.note || '', log: r.log || null, typecheck: /(?:^|\s)(?:\S*\/)?tsc\s/.test(s.run) }
+  const res = { id: s.id, job: s.job, name: s.name, label: label(s), tier: s.tier.tier, status: r.status, ms: r.ms, note: r.note || '', log: r.log || null, typecheck: /(?:^|\s)(?:\S*\/)?tsc\s/.test(s.run), load: !!s.tier.entries?.some((e) => /headless load/.test(e.why)) }
   results.push(res)
   if (r.status === 'FAIL' && !c.rerun) failed++
   const t = r.status === 'cached' || r.status === 'not here' || r.status === 'left' ? '' : secs(r.ms)
@@ -460,7 +460,7 @@ if (!chosen.length) {
   const ran = results.filter((r) => r.status === 'ok' || r.status === 'FAIL' || r.status === 'SKIP')
   console.log('')
   if (provLines.length) console.log(`providers: ${provLines.join('; ')}`)
-  const slow = ran.filter((r) => r.tier === 'fast' && r.ms > 5000 && opts.affected && !r.typecheck)
+  const slow = ran.filter((r) => r.tier === 'fast' && r.ms > 5000 && opts.affected && !r.typecheck && !r.load)
   if (leftovers.length) console.log(`left processes running when they ended (stopped): ${leftovers.join(', ')}`)
   if (slow.length) console.log(`over 5 s (move to full in scripts/lib/test-tiers.mjs, with a reason): ${slow.map((r) => `${r.label} ${secs(r.ms)}`).join(', ')}`)
   const flaky = results.filter((r) => r.flaky).map((r) => r.label)
