@@ -16001,3 +16001,53 @@ and the required check alone took 9 to 11 minutes.
   check a release requires. They are not met per push: most mutant suites are
   in the full tier, so a green `validate` says nothing about them, and a
   review that cites CI for one has not run it.
+
+## 2026-11-28 — bento/id: a person's identity proof travels in presence, and only a proven key is resolved
+
+The second kernel half of ID3. Once whoami answers an identity in an open, the
+sync session carries that person's public certificates to the room, so another
+person's agent can resolve them offline (`identityport.ts
+createProofResolver`). `kernel/src/sync/idproof.ts`, wired in
+`kernel/src/sync/session.ts`.
+
+- **What travels.** Four optional fields on hello and presence frames, beside
+  the frame's key proof and never inside `p` (the peer record an app reads):
+  `idk` (the identity device key whoami named), `idh` (base64url sha256 of the
+  proof's JSON, on every beat), `idp` (the proof itself: on hello, on the first
+  beat after it changes, and in answer to an ask; never on an ordinary beat),
+  and `ik`, a possession proof. One new frame, `{t:'idq', a, to, h}`, asks a
+  peer for the proof with hash `h`; a receiver asks once per (actor, hash),
+  again only after 30 seconds, and a sender answers at most once every 5
+  seconds (asks inside that share the one answer). Older clients ignore all of
+  it. No crdt.ts change and no relay change: the relay sees ciphertext.
+- **Nothing before consent.** `SyncSession.useIdentity(agent)` asks whoami
+  itself; nothing is carried before it answers, after it answers null, for an
+  identity without a proof, after `useIdentity(null)`, or once the session
+  moves to another document (consent and every peer's identity are per open).
+- **The possession proof is the agent's routine `prove` signature** with the
+  identity key over `prove.<nonce>.<roomId>`, where the nonce is the first 16
+  bytes of sha256 of `idpres.v1.<roomId>.<actor>.<idk>.<idh>.<t>`. It binds the
+  room, the actor, the key, the proof and the time, and the receiver recomputes
+  it. The relay's own `prove.` challenge uses a nonce the relay draws at random
+  per socket, so a presence signature cannot answer it. Freshness is the
+  presence key proof's: within 90 seconds of the receiver's clock and never
+  older than the last accepted one. A sender re-signs every 30 seconds rather
+  than per beat, so a beat may re-send the same `ik`; once the actor has left,
+  only a strictly newer one proves it again. A signature the agent refuses,
+  makes with another key, or does not give within 3 seconds leaves that beat
+  without identity fields; presence carries on.
+- **Only a proven key is resolved (A4).** `peerIdentity(actor)` answers only
+  while the actor is present, its latest beat proved the key it names for that
+  proof, and the session holds a proof whose own hash is that `idh`.
+  `resolvePeer(actor, agent)` answers 'unproven' without asking the agent
+  otherwise. A proof copied with someone else's key is never handed out; a
+  proof presented with the presenter's own key resolves to null because the
+  resolver binds the certificate to the queried key.
+- **Privacy.** The proof exposes the address and the account's member history
+  (passkey keys, reset and change times) to every room member, readers
+  included. That is the design; it is sent only after whoami consent in that
+  open.
+- Guarded by new rows in `scripts/test-sync-keyproof.ts` (real certificates
+  from the deterministic test keys, the real peer resolver, one per open) and
+  their mutants in `scripts/test-sync-keyproof-mutants.ts`. The rig moves to
+  the full tier: about 7 seconds, mostly waiting for frames to settle.

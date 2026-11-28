@@ -210,6 +210,9 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
   // the HOST side of the frame port (ID3): it composes and checks answers and never asks for an agent itself
   const HOST = 'kernel/src/identityport.ts'
   const HOST_IMPORT = "import {\n  checkResolved, composeResolved, isVoucher, ACCOUNT_ANCHOR_RE, PROOF_MAX_BYTES,\n  type IdentityProof, type PublicIdentity, type ResolvedIdentity, type SignPurpose, type SignResult,\n} from './identity.ts'"
+  // the sync session's identity proof (K-ID3b): the one proof cap, nothing else; the app hands it an agent
+  const IDP = 'kernel/src/sync/idproof.ts'
+  const IDP_IMPORT = "import { PROOF_MAX_BYTES, type IdentityProof } from '../identity.ts'"
   const CHANGED_LINE = "if (a.changed === true) return name && isVoucher(via) ? { kind: 'changed', name, via } : { kind: 'failed' }"
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const files = new Map<string, string>()
@@ -238,6 +241,7 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
         if (rel === GATED && m[0] === GATED_IMPORT) continue
         if (rel === CONST_ONLY && m[0] === CONST_IMPORT) continue
         if (rel === HOST && m[0] === HOST_IMPORT) continue
+        if (rel === IDP && m[0] === IDP_IMPORT) continue
         bad.push(`${rel}: ${m[0].replace(/\s+/g, ' ').slice(0, 80)}`)
       }
       // the host port is host code: no app imports it
@@ -247,6 +251,7 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
     }
     const hp = strip(fs.get(HOST) ?? '')
     if (/\bidentityAgent\b|\bdetectIdentityAgentForTest\b/.test(hp)) bad.push(`${HOST}: asks for an agent (it serves one)`)
+    if (/\bidentityAgent\b|\bdetectIdentityAgentForTest\b/.test(strip(fs.get(IDP) ?? ''))) bad.push(`${IDP}: asks for an agent (the app hands one to the session)`)
     const g = strip(fs.get(GATED) ?? '')
     const need = (c: boolean, why: string) => { if (!c) bad.push(`${GATED}: ${why}`) }
     need((g.match(/\bidentityAgent\b/g) || []).length === 2, 'identityAgent named exactly twice (the import and the one gated call)')
@@ -300,6 +305,8 @@ console.log('\ncontract only: nothing calls it yet, except the People panel (age
     ['the decision module importing a second binding', [[C, CONST_IMPORT, CONST_IMPORT + "\nimport { detectIdentityAgentForTest } from '../../../kernel/src/identity.ts'"]]],
     ['the host port asking for an agent', [[HOST, HOST_IMPORT, HOST_IMPORT.replace('checkResolved,', 'checkResolved, identityAgent,') + "\nexport const __leak = () => identityAgent()"]]],
     ['the host port importing a second binding', [[HOST, HOST_IMPORT, HOST_IMPORT + "\nimport { identityAgent } from './identity.ts'"]]],
+    ['the sync identity proof asking for an agent', [[IDP, IDP_IMPORT, IDP_IMPORT.replace('PROOF_MAX_BYTES,', 'PROOF_MAX_BYTES, identityAgent,') + "\nexport const __leak = () => identityAgent()"]]],
+    ['the sync identity proof importing a second binding', [[IDP, IDP_IMPORT, IDP_IMPORT + "\nimport { identityAgent } from '../identity.ts'"]]],
     ['an app importing the host port', [[E, EDIT_ANCHOR, "import { serveIdentity } from '../../../kernel/src/identityport.ts'\nexport const __leak = serveIdentity\n" + EDIT_ANCHOR]]],
     ['an export * of identity', [[V, "export type { VouchState } from './vouchstate'", "export type { VouchState } from './vouchstate'\nexport * from '../../../kernel/src/identity.ts'"]]],
   ]

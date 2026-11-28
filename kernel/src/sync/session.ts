@@ -11,6 +11,9 @@
 //   {t:'ops',   a, ops}      op batch
 //   {t:'need',  a, vv}       gap catch-up request (receivers send missing ops)
 //   {t:'p',     a, p}        presence heartbeat   {t:'bye', a}  leave
+//   {t:'idq',   a, to, h}    ask `to` for its identity proof `h` (idproof.ts)
+// hello and p may carry kp (keyproof.ts) and idk/idh/ik/idp (idproof.ts),
+// beside `p`, never inside it.
 //
 // The differ is the whole integration: every local mutation already flows
 // through store.commit/touch → 'doc' event → (debounced) diff against the
@@ -35,6 +38,8 @@ export type { BlobRef, CollabCreds, SyncDoc }
 import { putBlob, getBlob, dataUriToBytes, bytesToDataUri, encodedSize, MAX_BLOB } from './blobs.ts'
 import { mintCollab, cachedMemberPub, cachedMemberIdentity, importSignKey } from './online.ts'
 import { KeyProofs, signProof, roomIdOf, type KeyProof } from './keyproof.ts'
+import { IdProofs, proofHash, idNonce, idProveText, ID_PROOF_REFRESH_MS, type IdKeyProof } from './idproof.ts'
+import type { IdentityAgent, IdentityProof, PublicIdentity, ResolvedIdentity } from '../identity.ts'
 import { lsGet, lsJson } from '../storage.ts'
 import { copy } from '../documentvalue.ts'
 
@@ -187,10 +192,14 @@ export interface Peer extends PresenceInfo {
   at: number
 }
 
-interface HelloFrame { t: 'hello'; a: string; vv: Record<string, number>; p: PresenceInfo; kp?: KeyProof }
+/** identity in presence (idproof.ts): top-level, never inside `p` */
+interface IdFrameFields { idk?: string; idh?: string; ik?: IdKeyProof; idp?: IdentityProof }
+interface HelloFrame extends IdFrameFields { t: 'hello'; a: string; vv: Record<string, number>; p: PresenceInfo; kp?: KeyProof }
 interface OpsFrame { t: 'ops'; a: string; ops: Op[] }
 interface NeedFrame { t: 'need'; a: string; vv: Record<string, number> }
-interface PresFrame { t: 'p'; a: string; p: PresenceInfo; kp?: KeyProof }
+interface PresFrame extends IdFrameFields { t: 'p'; a: string; p: PresenceInfo; kp?: KeyProof }
+/** ask `to` for the identity proof whose hash is `h` */
+interface IdqFrame { t: 'idq'; a: string; to: string; h: string }
 interface ByeFrame { t: 'bye'; a: string }
 /** state-based fork merge: a rejoining offline-edited copy announces itself */
 interface SnapFrame {
@@ -202,7 +211,7 @@ interface SnapFrame {
 /** every frame is stamped with the sync protocol version (`pv: SYNC_V`) by
  * send(); frames without the current pv (old builds, stale relay logs from
  * the bare-id era) are dropped in onFrame — their keys don't interoperate */
-export type Frame = (HelloFrame | OpsFrame | NeedFrame | PresFrame | ByeFrame | SnapFrame) & {
+export type Frame = (HelloFrame | OpsFrame | NeedFrame | PresFrame | ByeFrame | SnapFrame | IdqFrame) & {
   pv?: number
 }
 
@@ -392,6 +401,20 @@ export class SyncSession {
   /** the last proof timestamp this actor sent; strictly increasing */
   private lastProofT = 0
   private signKeys = new Map<string, Promise<CryptoKey | null>>()
+  /** identity proofs peers carry in presence: per-actor verification state (idproof.ts) */
+  private ids = new IdProofs()
+  /** this copy's own identity, set only from whoami in THIS open (useIdentity) */
+  private idSelf: { agent: IdentityAgent; pub: string; proof: IdentityProof; hash: string } | null = null
+  /** bumped whenever idSelf is set or cleared, so a stale whoami or signature is discarded */
+  private idGen = 0
+  /** the current possession proof for idSelf */
+  private idIk: { t: number; g: string; room: string; hash: string } | null = null
+  /** after a refused or failed signature, no new one is asked for before this */
+  private idRetryAt = 0
+  /** the next presence frame carries the proof itself (it changed, or was asked for) */
+  private idSendFull = false
+  private idLastAnswer = 0
+  private idAnswerTimer: ReturnType<typeof setTimeout> | null = null
   private applying = false
   private diffTimer: number | null = null
   private heartbeat: number | null = null
@@ -493,6 +516,10 @@ export class SyncSession {
     this.peersMap.clear()
     this.proofs.reset()
     this.proofGen++
+    // a new open: the identity this copy used and every peer's are forgotten;
+    // the app asks whoami again for this document (consent is per open)
+    this.ids.reset()
+    this.clearIdentity()
     this.emitPeers()
     for (const tr of this.transports) tr.close()
     this.transports = [new BroadcastTransport(this.docId, (f) => this.onFrame(f))]
@@ -803,7 +830,7 @@ export class SyncSession {
     switch (f.t) {
       case 'hello': {
         const newcomer = !this.peersMap.has(f.a)
-        this.notePresence(f.a, f.p, f.kp)
+        this.notePresence(f.a, f.p, f.kp, f)
         // answer so the newcomer learns us + catch them up from our log,
         // AND tell them our vv so ops they minted before connecting (which
         // nothing else would push) flow back to us — need→ops terminates
@@ -832,7 +859,10 @@ export class SyncSession {
         break
       }
       case 'p':
-        this.notePresence(f.a, f.p, f.kp)
+        this.notePresence(f.a, f.p, f.kp, f)
+        break
+      case 'idq':
+        this.answerIdq(f)
         break
       case 'snap':
         this.applySnapshot(f.doc, f.state)
@@ -843,6 +873,7 @@ export class SyncSession {
         void this.proofs.queue(f.a, () => {
           if (gen !== this.proofGen) return
           this.proofs.drop(f.a)
+          this.ids.drop(f.a)
           this.peersMap.delete(f.a)
           this.emitPeers()
         })
@@ -979,7 +1010,8 @@ export class SyncSession {
     const s = frame.p.pub ? this.proofSigner() : null
     const room = roomIdOf(this.store.doc.collab?.room)
     const signable = !!s && s.pub === frame.p.pub && !!room
-    if (!signable && this.presPending === 0) { this.send(frame); return }
+    const identity = !!this.idSelf && !!room
+    if (!signable && !identity && this.presPending === 0) { this.send(frame); return }
     const gen = this.proofGen
     this.presPending++
     this.presQueue = this.presQueue.then(async () => {
@@ -992,17 +1024,146 @@ export class SyncSession {
           out = { ...frame, kp: await signProof(key, room!, this.actor, s!.pub, t) }
         }
       } catch { /* unsigned: still presence, just not proven */ }
+      if (identity) {
+        try { out = { ...out, ...(await this.identityFields(room!, frame.t === 'hello')) } } catch { /* no identity this beat */ }
+      }
       if (gen === this.proofGen) this.send(out)
     }).finally(() => { this.presPending-- })
   }
 
+  // --- identity in presence (idproof.ts) -------------------------------------
+
+  /** How long the agent gets to sign a possession proof before a beat goes without one. */
+  static ID_SIGN_TIMEOUT_MS = 3_000
+  /** An answer to an ask is sent at most this often; asks inside it share one answer. */
+  static ID_ANSWER_COOLDOWN_MS = 5_000
+
+  /**
+   * Carry this person's identity in presence, for THIS open: asks `agent`
+   * whoami (the host's consent decision) and, when it answers an identity with
+   * a proof, sends the proof on the next beat and its hash on every beat after,
+   * each beat with a possession proof the agent signs ('prove'). Nothing is
+   * sent before whoami answers, nor after it answers null; `null` for the
+   * agent stops. Moving to another document clears it. Returns what whoami said.
+   */
+  async useIdentity(agent: IdentityAgent | null): Promise<PublicIdentity | null> {
+    const gen = ++this.idGen
+    this.clearIdentity(false)
+    if (!agent) { this.pushPresence(); return null }
+    let me: PublicIdentity | null = null
+    try { me = await agent.whoami() } catch { me = null }
+    if (gen !== this.idGen) return me
+    const hash = me && typeof me.devicePub === 'string' && me.proof ? await proofHash(me.proof) : null
+    if (gen !== this.idGen) return me
+    if (me && hash) {
+      this.idSelf = { agent, pub: me.devicePub, proof: me.proof!, hash }
+      this.idSendFull = true
+    }
+    this.pushPresence()
+    return me
+  }
+
+  private clearIdentity(bump = true) {
+    if (bump) this.idGen++
+    this.idSelf = null
+    this.idIk = null
+    this.idRetryAt = 0
+    this.idSendFull = false
+    if (this.idAnswerTimer) { clearTimeout(this.idAnswerTimer); this.idAnswerTimer = null }
+  }
+
+  /** The identity fields for one outgoing frame: none when there is no identity or no fresh possession proof. */
+  private async identityFields(room: string, hello: boolean): Promise<IdFrameFields> {
+    const me = this.idSelf
+    if (!me) return {}
+    const gen = this.idGen
+    let ik = this.idIk
+    const now = Date.now()
+    if (!ik || ik.room !== room || ik.hash !== me.hash || now - ik.t > ID_PROOF_REFRESH_MS) {
+      if (now < this.idRetryAt) return {}
+      ik = await this.signIdKey(me, room)
+      if (gen !== this.idGen) return {}
+      if (!ik) { this.idIk = null; this.idRetryAt = Date.now() + ID_PROOF_REFRESH_MS; return {} }
+      this.idIk = ik
+    }
+    const out: IdFrameFields = { idk: me.pub, idh: me.hash, ik: { t: ik.t, g: ik.g } }
+    if (hello || this.idSendFull) { out.idp = me.proof; this.idSendFull = false }
+    return out
+  }
+
+  private lastIdT = 0
+  /** The agent's possession proof for `me` in `room`, or null (refused, wrong key, or no answer in time). */
+  private async signIdKey(me: NonNullable<SyncSession['idSelf']>, room: string): Promise<SyncSession['idIk']> {
+    const t = Math.max(Date.now(), this.lastIdT + 1)
+    this.lastIdT = t
+    const text = idProveText(await idNonce(room, this.actor, me.pub, me.hash, t), room)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const res = await Promise.race([
+      Promise.resolve().then(() => me.agent.sign('prove', text)).catch(() => null),
+      new Promise<null>((r) => { timer = setTimeout(() => r(null), SyncSession.ID_SIGN_TIMEOUT_MS) }),
+    ]).finally(() => clearTimeout(timer))
+    // the key that signed must be the one the proof certifies
+    if (!res || res.ok !== true || res.pub !== me.pub || typeof res.sig !== 'string') return null
+    return { t, g: res.sig, room, hash: me.hash }
+  }
+
+  /** A peer asked for our proof: one answer per cooldown, carrying it on a beat. */
+  private answerIdq(f: IdqFrame) {
+    const me = this.idSelf
+    if (!me || f.to !== this.actor || f.h !== me.hash) return
+    if (this.idAnswerTimer) return // an answer is already due
+    const wait = this.idLastAnswer + SyncSession.ID_ANSWER_COOLDOWN_MS - Date.now()
+    const answer = () => {
+      this.idAnswerTimer = null
+      if (this.idSelf !== me) return
+      this.idLastAnswer = Date.now()
+      this.idSendFull = true
+      this.pushPresence()
+    }
+    if (wait <= 0) answer()
+    else this.idAnswerTimer = setTimeout(answer, wait)
+  }
+
+  /**
+   * The bento/id identity `actor` has PROVEN in this session (A4): its latest
+   * beat proved possession of the key it names, for this room, this actor and
+   * this proof, and the proof whose own hash it named is held. Null otherwise,
+   * and always null for an actor that is not present. A proof is public, so
+   * anyone can copy one: only this answer may be resolved.
+   */
+  peerIdentity(actor: string): { pub: string; proof: IdentityProof } | null {
+    return this.peersMap.has(actor) ? this.ids.peer(actor) : null
+  }
+
+  /** Has `actor` proven, in this session, that it holds the identity key `pub`? */
+  identityProven(actor: string, pub: string): boolean {
+    return this.peersMap.has(actor) && this.ids.proven(actor, pub)
+  }
+
+  /**
+   * Ask `agent` who `actor` is: 'unproven', without asking, unless
+   * peerIdentity has an answer; otherwise the agent's answer to
+   * resolve({pub, proof}), null on any failure. Never throws.
+   */
+  async resolvePeer(actor: string, agent: IdentityAgent): Promise<ResolvedIdentity | null | 'unproven'> {
+    const id = this.peerIdentity(actor)
+    if (!id) return 'unproven'
+    try { return (await agent.resolve({ pub: id.pub, proof: id.proof })) ?? null } catch { return null }
+  }
+
   /** An incoming beat: judged for its key proof, then recorded, in arrival order. */
-  private notePresence(actor: string, p: PresenceInfo, kp: unknown) {
+  private notePresence(actor: string, p: PresenceInfo, kp: unknown, f: IdFrameFields) {
     if (!p || typeof p !== 'object') return
     const gen = this.proofGen
     const room = roomIdOf(this.store.doc.collab?.room)
     void this.proofs.accept(actor, room, p.pub, kp, () => {
       if (gen === this.proofGen) this.touchPeer(actor, p)
+    })
+    const { idk, idh, ik, idp } = f
+    void this.ids.accept(actor, room, { idk, idh, ik, idp }, (changed, ask) => {
+      if (gen !== this.proofGen) return
+      if (ask) this.send({ t: 'idq', a: this.actor, to: actor, h: ask })
+      if (changed) this.emitPeers()
     })
   }
 
@@ -1024,7 +1185,7 @@ export class SyncSession {
 
   private touchPeer(actor: string, p: PresenceInfo) {
     // a key proof belongs on the frame, never in the peer record an app reads
-    const { kp: _kp, ...rest } = p as PresenceInfo & { kp?: unknown }
+    const { kp: _kp, idk: _k, idh: _h, ik: _i, idp: _p, ...rest } = p as PresenceInfo & { kp?: unknown; idk?: unknown; idh?: unknown; ik?: unknown; idp?: unknown }
     this.peersMap.set(actor, { ...rest, actor, at: Date.now() })
     this.emitPeers()
   }
@@ -1036,6 +1197,7 @@ export class SyncSession {
       if (p.at < cut) {
         this.peersMap.delete(a)
         this.proofs.drop(a)
+        this.ids.drop(a)
         changed = true
       }
     }
