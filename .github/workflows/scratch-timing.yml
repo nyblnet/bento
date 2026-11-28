@@ -1,0 +1,60 @@
+# SCRATCH: timing of the quick check on five merged PRs' diffs, on GitHub's runner. Never merged.
+name: scratch quick-check timing
+on:
+  pull_request:
+    paths: ['.github/workflows/scratch-timing.yml']
+jobs:
+  time:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        pr:
+          - { n: 990, m: 42a1958b88ec0a41976e77f5731b98580cc27033 }
+          - { n: 982, m: b9cdb6136c83cc8da5db4e08a0b2c72fc3d8cef3 }
+          - { n: 991, m: 0c9e3486adbef03c85468d2ee5d52d9d9e41b262 }
+          - { n: 977, m: c5aa4b9134133994fceece97b2a720e62d127f6a }
+          - { n: 1000, m: 9365a870ad199dc15e5baace02f7834eebb9361a }
+    env:
+      BENTO_CHECK_CACHE: ${{ github.workspace }}/../bento-check-cache
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: overlay the tooling on the PR's base and merge
+        run: |
+          set -euo pipefail
+          T=$RUNNER_TEMP/tool; mkdir -p $T/lib
+          for f in scripts/check.mjs scripts/sweep.mjs scripts/lib/check-plan.mjs scripts/lib/check-cache.mjs scripts/lib/test-tiers.mjs scripts/test-ci-skips.mjs scripts/test-ci-registered.ts scripts/test-check.mjs scripts/test-shell-loader.ts scripts/release.mjs .github/workflows/ci.yml; do mkdir -p "$T/$(dirname $f)"; cp "$f" "$T/$f"; done
+          git config user.name proof; git config user.email proof@localhost
+          overlay() {
+            git checkout -q --detach --force "$1"; git clean -fdxq
+            git show "$1:.github/workflows/ci.yml" > .github/workflows/ci-full.yml
+            (cd $T && find . -type f) | while read f; do cp "$T/$f" "$f"; done
+            grep -q 'test-check.mjs' .github/actions/validate-shared/action.yml || printf '\n    - name: check rig\n      shell: bento-step {0}\n      run: node scripts/test-check.mjs\n' >> .github/actions/validate-shared/action.yml
+            for f in .github/workflows/ci-*.yml .github/workflows/pr-build-size.yml; do ruby -e 'f=ARGV[0]; s=File.read(f); s.sub!(/^on:\n(?:(?:  .*|)\n)*?(?=^\S)/, "on:\n  workflow_dispatch:\n\n"); File.write(f,s)' "$f"; done
+            git add -A; git commit -qm "overlay on $1"; git rev-parse HEAD
+          }
+          B=$(overlay "${{ matrix.pr.m }}^1"); O=$(overlay "${{ matrix.pr.m }}")
+          echo "B=$B" >> $GITHUB_ENV
+          git diff --stat $B $O | tail -1
+      - name: Restore the apps' node_modules
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            slides/node_modules
+            spaces/node_modules
+            dash/node_modules
+            type/node_modules
+          key: deps-${{ runner.os }}-node24-${{ hashFiles('slides/package-lock.json', 'spaces/package-lock.json', 'dash/package-lock.json', 'type/package-lock.json') }}
+      - name: install (only when the lockfiles changed)
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: |
+          pids=(); for app in slides spaces dash type; do npm ci --prefix "$app" --no-audit --no-fund & pids+=($!); done; for p in "${pids[@]}"; do wait "$p"; done
+      - name: quick check, cold
+        run: /usr/bin/time -p node scripts/check.mjs --affected "$B" --logs "$RUNNER_TEMP/cold"
+      - name: quick check, warm (same job, same cache)
+        run: /usr/bin/time -p node scripts/check.mjs --affected "$B" --logs "$RUNNER_TEMP/warm"
