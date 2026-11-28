@@ -15,9 +15,10 @@
 // that each build slides build it once.
 //
 // WHAT A STEP READS. The scripts its run text names, and from each of them,
-// transitively: static imports, dynamic imports with a literal specifier, and
-// string literals that name a file or folder in the repo (a rig reading
-// kernel/src/save.ts as text reads it). A step that reads a built shell
+// transitively: static imports, dynamic imports with a literal specifier, and,
+// in code node runs (rigs, scripts, configs), string literals outside comments
+// that name a file or folder in the repo (a rig reading kernel/src/save.ts as
+// text reads it). A step that reads a built shell
 // (<app>/dist-single, dist-sealtest) reads everything that build reads: the
 // app's folder and everything it imports. A step's own YAML counts too: a step
 // whose definition changed is at distance 0.
@@ -137,7 +138,13 @@ export function buildGraph(view) {
       }
     }
     for (const re of IMPORT_RES) for (const m of text.matchAll(re)) addSpec(m[1])
-    // literals naming a repo path: relative to the file, then to the repo root
+    // literals naming a repo path: relative to the file, then to the repo root.
+    // Only in code node runs (rigs, scripts, configs, build tooling): app and
+    // kernel source is bundled and reads no repo file at run time, and a path
+    // it names in a comment (docs/DECISIONS.md) must not make every edit to
+    // that file a rebuild of every app.
+    const tooling = f.startsWith('scripts/') || /\.(?:mjs|cjs)$/.test(f) || /(?:^|\/)(?:vite|vitest)\.config\.|(?:^|\/)build[\w-]*\.(?:m?js|ts)$/.test(f)
+    const code = tooling ? text.split('\n').filter((l) => !/^\s*(?:\/\/|\/?\*)/.test(l)).join('\n') : ''
     const addPath = (s, dirsToo) => {
       if (s.length < 3 || /\s/.test(s) || /[*?<>|{}]/.test(s)) return
       for (const p of [clean(posix.join(here, s)), clean(s.replace(/^\/+/, ''))]) {
@@ -147,11 +154,11 @@ export function buildGraph(view) {
         if (dirsToo && dirs.has(p) && !/(?:^|\/)(?:node_modules|dist[\w-]*)$/.test(p)) { out.add(p + '/'); return }
       }
     }
-    for (const m of text.matchAll(LITERAL)) {
+    for (const m of code.matchAll(LITERAL)) {
       const s = m[1] ?? m[2] ?? m[3]
       if (s.includes('/') || /\.\w{1,5}$/.test(s)) addPath(s, s.includes('/'))
     }
-    for (const m of text.matchAll(JOINED)) {
+    for (const m of code.matchAll(JOINED)) {
       const parts = []
       for (const a of m[1].split(',')) {
         const lit = /^\s*['"]([^'"]+)['"]\s*$/.exec(a)
