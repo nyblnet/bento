@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts']
+const RIGS = ['test-directory.ts', 'test-directory-roster.ts', 'test-directory-browsers.ts', 'test-directory-consent.ts']
 /**
  * Every file under scripts/ the rigs reach through relative imports (the roster
  * rig runs the hosting check, which imports scripts/lib/), found by walking the
@@ -57,7 +57,7 @@ const ok = (c: boolean, m: string) => { checks++; if (!c) { failures++; console.
 
 type Edit = { from: string; to: string }
 /** `also`: further edits in the same file, for a rule held at two doors */
-type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js' | 'retire.js'; also?: Edit[] }
+type Mutant = Edit & { name: string; file: 'worker.js' | 'roster.js' | 'passkey.js' | 'links.js' | 'mail.js' | 'voidpage.js' | 'browsers.js' | 'challenge.js' | 'retire.js' | 'consent.js'; also?: Edit[] }
 const MUTANTS: Mutant[] = [
   // --- the first design's routes, retired ---
   { name: 'retired routes served again (fall through)', file: 'worker.js',
@@ -257,7 +257,7 @@ const MUTANTS: Mutant[] = [
     to: "  if (!chBytes) return no('challenge')\n  const origin = cd.get('origin')\n  if (typeof origin !== 'string' || !Object.hasOwn(PASSKEY.origins" },
   { name: 'request: no stored signature counter', file: 'roster.js', from: 'storedSignCount: rec.signCount', to: 'storedSignCount: undefined' },
   { name: 'request: a second change while one waits', file: 'roster.js', from: "      if (await s.get('pend')) return out(409, { error: 'pending' })\n", to: '' },
-  { name: 'request: wait from the requester\'s created', file: 'roster.js', from: 'ripensAt: now + ROSTER_WAIT_MS', to: 'ripensAt: next.created + ROSTER_WAIT_MS' },
+  { name: 'request: wait from the requester\'s created', file: 'roster.js', from: 'ripensAt: now + (x5 ? X5_WAIT_MS : ROSTER_WAIT_MS)', to: 'ripensAt: next.created + (x5 ? X5_WAIT_MS : ROSTER_WAIT_MS)' },
   { name: 'request: self-removal immediate while any member stays', file: 'roster.js',
     from: "next.members.some((m) => m.kind === 'pk' && !m.quarantined)", to: 'next.members.length > 0' },
   { name: 'request: a quarantined member may ask', file: 'roster.js', from: "      if (signer.quarantined) return out(403, { error: 'quarantined' })\n", to: '' },
@@ -414,7 +414,7 @@ const MUTANTS: Mutant[] = [
   { name: 'G4 remove: the suspension cites the head, not the voided request', file: 'roster.js',
     from: "      await this.link(qRos, { auth: 'q', cause: p.hash,", to: "      await this.link(qRos, { auth: 'q', cause: cur.hash," },
   { name: 'G4 remove: the voided request left out of the link', file: 'roster.js',
-    from: "        extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })", to: '        })' },
+    from: "        extra: { voided: { ros: p.ros, signer: target, ...(p.sk === 'ck' ? { sig: p.sig, cns: p.cns } : { assertion: p.assertion }) } } })", to: '        })' },
   { name: 'G4 remove: acts though its notice was not sent', file: 'roster.js',
     from: "      if (sent !== 'sent') {\n        await this.dropHold(hold)\n        // C8: a send that timed out may still arrive, so the page must not say it was not sent\n        return out(503, { error: sent === 'timeout' ? 'mail-timeout' : 'mail' })\n      }\n", to: '' },
   { name: 'G4 remove: the removal requested at ripening, not at the suspension', file: 'roster.js',
@@ -549,6 +549,62 @@ const MUTANTS: Mutant[] = [
   { name: 'page: WebAuthn not turned off', file: 'voidpage.js', from: "  'permissions-policy': 'publickey-credentials-get=(), publickey-credentials-create=()',\n", to: '' },
   { name: 'page: cached', file: 'voidpage.js', from: "  'cache-control': 'no-store',\n", to: "  'cache-control': 'max-age=3600',\n" },
   { name: 'page: Trusted Types not required', file: 'voidpage.js', from: `  "require-trusted-types-for 'script'",\n`, to: '' },
+  // --- SD4a: the consent route (consent.js, and the request op's consent-key paths; test-directory-consent.ts) ---
+  { name: 'SD4a: ripe means MORE than 72 h (the boundary)', file: 'consent.js', from: 'return t !== undefined && at - t >= ROSTER_WAIT_MS', to: 'return t !== undefined && at - t > ROSTER_WAIT_MS' },
+  { name: 'SD4a: any consent key that asks skips the wait', file: 'roster.js', from: 'const waived = !!cosign || (ckAsk && ripeAt(since, signer.pub, now))', to: 'const waived = !!cosign || ckAsk' },
+  { name: 'SD4a: the asker\'s ripeness read from its created', file: 'roster.js', from: 'const waived = !!cosign || (ckAsk && ripeAt(since, signer.pub, now))', to: 'const waived = !!cosign || (ckAsk && ripeAt(since, signer.pub, 2 * now - next.created))' },
+  { name: 'SD4a: the co-signer\'s ripeness measured at the ripening, not the request', file: 'consent.js', from: "if (!ripeAt(since, co.pub, at)) return no('cosign-unripe')", to: "if (!ripeAt(since, co.pub, at + ROSTER_WAIT_MS)) return no('cosign-unripe')" },
+  { name: 'SD4a: the co-sign is not stored in the link', file: 'roster.js', from: '...(p.cosign ? { cosign: p.cosign } : {}) } })', to: '} })' },
+  { name: 'SD4a: a consent key\'s proof is not stored in the link', file: 'roster.js', from: "...(p.sk === 'ck' ? { sig: p.sig, cns: p.cns } : { credId: p.credId, assertion: p.assertion })", to: '...({ credId: p.credId, assertion: p.assertion })' },
+  { name: 'SD4a: the served link drops the co-sign', file: 'consent.js', from: '    if (l.cosign !== undefined) out.cosign = l.cosign\n', to: '' },
+  { name: 'SD4a: a void\'s evidence keeps only an assertion', file: 'roster.js', from: "voided: { ros: p.ros, signer: target, ...(p.sk === 'ck' ? { sig: p.sig, cns: p.cns } : { assertion: p.assertion }) }", to: 'voided: { ros: p.ros, signer: target, assertion: p.assertion }' },
+  { name: 'SD4a: the requester may co-sign its own change', file: 'consent.js', from: "  if (c.signer === requester) return no('cosign')\n", to: '' },
+  { name: 'SD4a: a passkey may co-sign', file: 'consent.js', from: "  if (co.kind !== 'ck') return no('cosign-kind')\n", to: '' },
+  { name: 'SD4a: a quarantined key may co-sign', file: 'consent.js', from: "  if (co.quarantined) return no('cosign-quarantined')\n", to: '' },
+  { name: 'SD4a: the co-signer looked up in the NEW head', file: 'roster.js', from: 'checkCosign(a.cosign, { head: cur,', to: 'checkCosign(a.cosign, { head: next,' },
+  { name: 'SD4a: a co-sign that does not count falls back to the wait', file: 'roster.js', from: "        if (!c.ok) return out(400, { error: c.reason })\n        cosign = c.value", to: '        cosign = c.ok ? c.value : null' },
+  { name: 'SD4a: a falsy co-sign is taken as absent', file: 'roster.js', from: '      if (a.cosign !== undefined) {\n        const c = await checkCosign', to: '      if (a.cosign) {\n        const c = await checkCosign' },
+  { name: 'SD4a: a co-sign with extra fields accepted', file: 'consent.js', from: "  if (Object.keys(c).some((k) => !['signer', 'cns', 'sig'].includes(k))) return no('cosign')\n", to: '' },
+  { name: 'SD4a: the consent is untimed (live and peer checks both)', file: 'consent.js', from: "payloadText: text, docId: null, now: at,", to: "payloadText: text, docId: null, now: 0,",
+    also: [{ from: '}, text, nonce, at, { rpId', to: '}, text, nonce, null, { rpId' }] },
+  { name: 'SD4a: a quarantined consent key may ask', file: 'roster.js', from: "      if (signer.quarantined) return out(403, { error: 'quarantined' })\n      if (signer.kind !== (ckAsk", to: "      if (signer.quarantined && !ckAsk) return out(403, { error: 'quarantined' })\n      if (signer.kind !== (ckAsk" },
+  { name: 'SD4a: cooldown looked up by credential, not key', file: 'roster.js', from: 'const coolUntil = await s.get(`cool:${signer.pub}`)', to: 'const coolUntil = await s.get(`cool:${a.credId}`)' },
+  { name: 'SD4a: a co-signed change skips the one-at-a-time rule', file: 'roster.js', from: "      if (await s.get('pend')) return out(409, { error: 'pending' })", to: "      if (await s.get('pend') && a.cosign === undefined) return out(409, { error: 'pending' })" },
+  { name: 'SD4a: an immediate change acts on a failed notice', file: 'roster.js', from: '        if (!sent || !mine || atHead.hash', to: '        if (!mine || atHead.hash' },
+  { name: 'SD4a: an immediate change takes no hold', file: 'roster.js', from: "const hold = await this.takeHold(now, 'consent')", to: 'const hold = ownNonce()',
+    also: [{ from: '        const mine = (await s.get(\'hold\'))?.id === hold\n', to: '        const mine = true\n' }] },
+  { name: 'SD4a: the in-effect mail leaves out the roster', file: 'roster.js', from: "          'The passkeys on this account now:',\n          ...(await rosterLines(next.members, records, null)),\n          '',\n          'If you did not ask", to: "          '',\n          'If you did not ask" },
+  { name: 'SD4a: the in-effect mail leaves out the co-signer', file: 'roster.js', from: '`It took effect at once because the app key ${await fingerprint(cosign.signer)}, on this account', to: '`It took effect at once because an app key, on this account' },
+  { name: 'SD4a X5: never 7 days', file: 'roster.js', from: 'const x5 = !waived &&', to: 'const x5 = false &&' },
+  { name: 'SD4a X5: 7 days with or without a consent key', file: 'roster.js', from: "        cur.members.some((m) => m.kind === 'ck' && !m.quarantined && ripeAt(since, m.pub, now))", to: '        true' },
+  { name: 'SD4a X5: an unripe consent key stretches the wait', file: 'roster.js', from: "m.kind === 'ck' && !m.quarantined && ripeAt(since, m.pub, now))", to: "m.kind === 'ck' && !m.quarantined)" },
+  { name: 'SD4a: the log drops the consent fields', file: 'roster.js', from: "const consentLog = (p) => (p.sk === 'ck' || p.cosign || p.x5", to: 'const consentLog = (p) => (false' },
+  { name: 'SD4a: a consent key joins without proving its key', file: 'roster.js', from: "const c = await ckConsent(added[0], a.newKey, a.ros, next.dirNonce, 'roster', now)", to: 'const c = { ok: true }' },
+  { name: 'SD4a: a consent key asks with no proof checked', file: 'roster.js', from: "const c = await ckConsent(signer, { cns: a.cns, sig: a.sig }, a.ros, next.dirNonce, 'roster', now)", to: 'const c = { ok: true }' },
+  { name: 'SD4a: both kinds of proof at once', file: 'roster.js', from: "      if (ckAsk ? a.assertion !== undefined : a.signer !== undefined || a.cns !== undefined || a.sig !== undefined) return out(400, { error: 'proof' })\n", to: '' },
+  { name: 'SD4a: ripeness not read from the chain (every member ripe)', file: 'consent.js', from: '  return new Map(v.value.members.map((m) => [m.pub, m.since]))', to: '  return new Map(v.value.members.map((m) => [m.pub, 0]))' },
+  // --- SD4a fix round (security 987): X5 for consent keys, the asker's newKey, the post-mail rechecks, the ck record, key rotation ---
+  { name: 'SD4a 987-M1 X5: a consent key added from a browser waits only 72 h', file: 'roster.js',
+    from: "const x5 = !waived && change.op === 'add' && how === 'browser' &&", to: "const x5 = !waived && change.op === 'add' && change.kind !== 'ck' && how === 'browser' &&" },
+  { name: 'SD4a 987-M2: the added key\'s proof checked against the asking consent key', file: 'roster.js',
+    from: 'const c = await ckConsent(added[0], a.newKey,', to: 'const c = await ckConsent(ckAsk ? signer : added[0], a.newKey,' },
+  { name: 'SD4a 987-M3: after the notice, neither the hold nor the head rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || (await s.get('pend'))) {" },
+  { name: 'SD4a 987-M3: after the notice, the head not rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || !mine || (await s.get('pend'))) {" },
+  { name: 'SD4a 987-M3: after the notice, the hold not rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || atHead.hash !== cur.hash || (await s.get('pend'))) {" },
+  { name: 'SD4a 987-M3: after the notice, a change queued meanwhile not rechecked', file: 'roster.js',
+    from: "if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {", to: "if (!sent || !mine || atHead.hash !== cur.hash) {" },
+  { name: 'SD4a 987-N1: a consent key added keeps no record', file: 'roster.js',
+    from: "await s.put(`pk:${p.change.pub}`, { kind: 'ck', addedAt: now, how: p.how })", to: 'void 0' },
+  { name: 'SD4a 987-M4: the retired directory keys ignored', file: 'consent.js', from: '      keys[kid] = v\n', to: '' },
+  { name: 'SD4a 987-M4: the retired keys may name the current kid', file: 'consent.js',
+    from: "      if (kid === env.DIR_KID) throw new Error('DIR_RETIRED_KEYS names the current DIR_KID')\n", to: '' },
+  { name: 'SD4a 987-M4: a retired key need not be a point', file: 'consent.js',
+    from: "      if (!point(v)) throw new Error(`DIR_RETIRED_KEYS ${kid} is not a P-256 point`)\n", to: '' },
+  { name: 'SD4a 987-M4: the retired keys need not be an object', file: 'consent.js',
+    from: "    if (!all || typeof all !== 'object' || Array.isArray(all)) throw new Error('DIR_RETIRED_KEYS is not a { kid: key } object')\n", to: '' },
   // --- sign out everywhere (wout.) enabled; security's D-W2 on #962 ---
   { name: 'wout D-W2: no per-account limit', file: 'browsers.js',
     from: "    if (recent.length >= BROWSER_LIMITS.signoutsPerDay) return out(429, { error: 'rate-limited' })\n", to: '' },
@@ -669,6 +725,14 @@ const MUTANTS: Mutant[] = [
     to: "  if (!(await ledger(`${ip}\\n${scope}`, 'retire'))) return json(429, { error: 'rate-limited' })\n  const ch = await openBrowser(scope, v.value.dirNonce)\n  if (!ch) return json(400, { error: 'nonce' })\n" },
   { name: 'wret R15: the retirement not limited per address', file: 'retire.js',
     from: "  if (!(await ledger(`${ip}\\n${scope}`, 'retire'))) return json(429, { error: 'rate-limited' })\n", to: '' },
+  // --- every chain check reads the chain as a peer does (consent.js chainOpts, linkOut), so a consent-key account signs out and stops a reset ---
+  { name: 'chain-reads: the sign-out reads the chain without the consent rp', file: 'browsers.js',
+    from: "verifyRosterChain(await chainFrom(s), chainOpts(obj.env, now))", to: "verifyRosterChain(await chainFrom(s), { ...chainOpts(obj.env, now), consentRp: undefined })" },
+  { name: 'chain-reads: the reset stop reads the chain without the consent rp', file: 'roster.js',
+    from: "verifyRosterChain(await this.storedChain(), chainOpts(this.env, now))", to: "verifyRosterChain(await this.storedChain(), { ...chainOpts(this.env, now), consentRp: undefined })" },
+  { name: 'chain-reads: the reset stop\'s chain drops a consent key\'s proof', file: 'roster.js',
+    from: "    return [...(await this.state.storage.list({ prefix: 'link:' })).values()].map(linkOut)\n",
+    to: "    return [...(await this.state.storage.list({ prefix: 'link:' })).values()].map((l) => ({ ...linkOut(l), cns: undefined, sig: undefined }))\n" },
 ]
 
 function tree(): string {

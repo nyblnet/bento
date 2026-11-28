@@ -70,9 +70,25 @@
 // stoppable. When it takes effect the roster is that one new passkey, under
 // the word `r`.
 //
-// NOT HERE YET (each a later change): consent-key and recovery-key members
-// (a reset stop by one is refused by name until their proofs are wired);
-// account deletion; the chain route peers read.
+// CONSENT KEYS (consent.js). A native app's consent key (`ck`) is a member
+// too. It asks for a change with its `cns.` (purpose roster) over the exact
+// ros. text instead of an assertion, under every rule a passkey asks under
+// (quarantine, the 72-hour cooldown after a Cancel, one change at a time, the
+// hold). A ck added to the roster brings its own cns. over the same ros. text,
+// so nobody adds a key they do not hold. Any member's request may carry a
+// `cosign` from ANOTHER ck of the current head. A change asked for by a ripe
+// ck, or co-signed by one, takes effect at once (still under `m`); ripe means
+// a member for 72 hours at the request, on the stored chain run through the
+// kernel's verifier. A co-sign that does not count is refused, never ignored.
+// An immediate change still mails its notice first and acts only once the
+// mailer accepted it, under the hold. X5: on an account with a ripe ck, any
+// key added from a browser (a passkey or a ck) waits 7 days unless that ck
+// co-signs it.
+//
+// NOT HERE YET (each a later change): recovery-key members (a reset stop by
+// a recovery key or a consent key is refused by name until their proofs are
+// wired); account deletion; the chain route peers read; route D (a phone
+// approving a browser), which waits on its kernel layout.
 
 import { mailEnv, putMailStop } from './mail.js' // the address's stop list (SES bounces and complaints)
 import { b64uDec, b64uEnc, sha256b64u, signStatement } from '../../../kernel/src/statements.ts'
@@ -81,6 +97,7 @@ import { HOME_ORIGIN, PASSKEY, passkeyOrigins, verifyMemberAssertion, verifyRegi
 import { BROWSER_OPS, browserOp } from './browsers.js'
 import { deliver, MAIL_TIMEOUT_MS } from './mail.js'
 import { resetLink, setupLink, voidLink } from './links.js'
+import { chainOpts, checkCosign, ckConsent, linkOut, ripeAt, sinceOf, X5_WAIT_MS } from './consent.js'
 
 const MIN = 60_000, DAY = 86_400_000
 
@@ -189,21 +206,6 @@ async function countersign(env, r) {
   return { rip, ripSig: await signStatement(signer.key, rip) }
 }
 
-/**
- * The directory's own public keys, by kid, as a peer pins them: the online
- * key's public half, and any earlier key DIR_PUBKEYS lists as {kid, pub}
- * (after a rotation the chain still carries links the old key signed).
- */
-async function directoryKeys(env) {
-  const jwk = JSON.parse(env.DIR_KEY_JWK)
-  const pub = await crypto.subtle.importKey('jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify'])
-  const keys = { [env.DIR_KID]: b64uEnc(new Uint8Array(await crypto.subtle.exportKey('raw', pub))) }
-  let more = []
-  try { more = JSON.parse(env.DIR_PUBKEYS || '[]') } catch { /* none */ }
-  for (const k of Array.isArray(more) ? more : []) if (k && typeof k.kid === 'string' && typeof k.pub === 'string' && !Object.hasOwn(keys, k.kid)) keys[k.kid] = k.pub
-  return keys
-}
-
 /** An assertion's signature counter (authenticator data bytes 33-36), or null when it does not read. */
 function signCountOf(assertion) {
   const ad = assertion && typeof assertion.authenticatorData === 'string' ? b64uDec(assertion.authenticatorData) : null
@@ -216,6 +218,14 @@ const spentUntil = (k) => Number(k.slice(6, 22)) + ROSTER_LIMITS.spentKeepMs
 const when = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')
 const HOW = { setup: 'at setup', browser: 'from a browser', app: 'from an app' }
 const hostClass = (origin) => PASSKEY.origins[origin] ?? 'browser'
+/**
+ * The log's consent fields, for the incident lever's query: the asker's kind
+ * (`sk`), the co-signer (`cs`) and the wait it took (`wt`). Only on a change a
+ * consent key asked for or co-signed, or one X5 held 7 days; a passkey's plain
+ * request logs as it always did.
+ */
+const consentLog = (p) => (p.sk === 'ck' || p.cosign || p.x5
+  ? { sk: p.sk ?? 'pk', cs: p.cosign?.signer ?? '', how: p.how ?? '', wt: p.x5 ? 'x5' : p.waived ? 'none' : '72h' } : {})
 
 // --- mail ------------------------------------------------------------------------
 
@@ -226,7 +236,7 @@ async function rosterLines(members, records, pendingAdd) {
     const fp = await fingerprint(m.pub)
     const r = records[m.pub]
     const how = m.pub === pendingAdd ? 'being added by this change' : r ? `added ${when(r.addedAt)} ${HOW[r.how] ?? ''}`.trim() : 'added earlier'
-    out.push(`  - passkey ${fp}, ${how}${m.quarantined ? ', suspended' : ''}`)
+    out.push(`  - ${m.kind === 'ck' ? 'app key' : 'passkey'} ${fp}, ${how}${m.quarantined ? ', suspended' : ''}`)
   }
   return out
 }
@@ -502,12 +512,8 @@ export class Roster {
 
   /** The stored chain, setup first, as kernel RosterLink objects. */
   async storedChain() {
-    return [...(await this.state.storage.list({ prefix: 'link:' })).values()].map((l) => {
-      const out = { ros: l.ros, rip: l.rip, ripSig: l.ripSig }
-      if (l.kind === 'member') { out.signer = l.signer; out.assertion = l.assertion }
-      if (l.voided) out.voided = l.voided
-      return out
-    })
+    // a consent key's proof and a co-sign travel too (consent.js linkOut), so the chain verifies as a peer's does
+    return [...(await this.state.storage.list({ prefix: 'link:' })).values()].map(linkOut)
   }
 
   /**
@@ -561,7 +567,7 @@ export class Roster {
   }
 
   /** The waiting change `p` takes effect (or a member's self-removal, at once). */
-  async apply(p, now, k) {
+  async apply(p, now, k, quiet = false) {
     const s = this.state.storage
     const kind = p.kind ?? 'member'
     const address = (await parseRos(p.ros)).value.address
@@ -581,9 +587,12 @@ export class Roster {
       const r = await s.get(`pk:${p.change.pub}`)
       await s.delete([`pk:${p.change.pub}`, `cool:${p.change.pub}`, ...(r ? [`cid:${r.credId}`] : [])])
     } else {
+      // a consent key's proof and a co-sign ride in the link, so every peer's verifier reproduces the wait it skipped
       head = await this.link(p.ros, { auth: 'm', requestedAt: p.requestedAt, now, kind: 'member',
-        extra: { signer: p.signer, credId: p.credId, assertion: p.assertion } })
-      if (p.change.op === 'add') {
+        extra: { signer: p.signer, ...(p.sk === 'ck' ? { sig: p.sig, cns: p.cns } : { credId: p.credId, assertion: p.assertion }), ...(p.cosign ? { cosign: p.cosign } : {}) } })
+      if (p.change.op === 'add' && p.change.kind === 'ck') {
+        await s.put(`pk:${p.change.pub}`, { kind: 'ck', addedAt: now, how: p.how })
+      } else if (p.change.op === 'add') {
         await s.put(`pk:${p.change.pub}`, { credId: p.reg.credId, signCount: p.reg.signCount, addedAt: now, how: p.how })
         await s.put(`cid:${p.reg.credId}`, p.change.pub)
       } else {
@@ -598,7 +607,8 @@ export class Roster {
       if (p.parked) await this.ended(p.parked.voidTok, 'late', now, 'reset')
     }
     const fp = await fingerprint(p.change.pub)
-    await this.log({ k, at: now, seq: head.seq, op: kind === 'reset' ? 'reset' : p.change.op, pub: p.change.pub, by: p.signer ?? '', os: p.os ?? '', rq: p.rq ?? '', co: p.co ?? '' })
+    await this.log({ k, at: now, seq: head.seq, op: kind === 'reset' ? 'reset' : p.change.op, pub: p.change.pub, by: p.signer ?? '', os: p.os ?? '', rq: p.rq ?? '', co: p.co ?? '', ...consentLog(p) })
+    if (quiet) return // its notice went out before it acted (an immediate change)
 
     const records = await this.records(head.members)
     const what = kind === 'reset' ? `this account was reset: its only passkey is now ${fp}, made at the reset`
@@ -745,19 +755,31 @@ export class Roster {
       if (await this.held(now)) return out(409, { error: 'pending' })
       if (a.rq !== undefined && a.rq !== '' && !REQUESTERS.includes(a.rq)) return out(400, { error: 'rq' })
 
-      // the member who asked
-      const signerPub = typeof a.credId === 'string' ? await s.get(`cid:${a.credId}`) : undefined
+      // the member who asked: a passkey by its credential (an assertion), or a
+      // consent key by its key (a cns.); never both kinds of proof at once
+      const ckAsk = a.credId === undefined && a.signer !== undefined
+      if (ckAsk ? a.assertion !== undefined : a.signer !== undefined || a.cns !== undefined || a.sig !== undefined) return out(400, { error: 'proof' })
+      const signerPub = ckAsk ? (typeof a.signer === 'string' ? a.signer : undefined)
+        : typeof a.credId === 'string' ? await s.get(`cid:${a.credId}`) : undefined
       const signer = signerPub && cur.members.find((m) => m.pub === signerPub)
       if (!signer) return out(400, { error: 'signer' })
       if (signer.quarantined) return out(403, { error: 'quarantined' })
-      if (signer.kind !== 'pk') return out(400, { error: 'signer-kind' })
-      // G4b: a passkey whose last change was cancelled from the void page may not ask again for 72 hours
+      if (signer.kind !== (ckAsk ? 'ck' : 'pk')) return out(400, { error: 'signer-kind' })
+      // G4b: a member whose last change was cancelled from the void page may not ask again for 72 hours, whatever its kind
       const coolUntil = await s.get(`cool:${signer.pub}`)
       if (coolUntil && coolUntil > now) return out(403, { error: 'cooldown', until: coolUntil })
-      const rec = await s.get(`pk:${signer.pub}`)
-      const v = await verifyMemberAssertion(a.assertion, { publicKey: signer.pub, text: a.ros, storedSignCount: rec.signCount })
-      if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
-      await s.put(`pk:${signer.pub}`, { ...rec, signCount: v.value.signCount }) // in order, per credential
+      let v
+      if (ckAsk) {
+        // a consent key's cns., purpose roster (fixed here, never the request's), over this exact ros. text and its challenge
+        const c = await ckConsent(signer, { cns: a.cns, sig: a.sig }, a.ros, next.dirNonce, 'roster', now)
+        if (!c.ok) return out(400, { error: c.reason })
+        v = { value: { origin: '' } }
+      } else {
+        const rec = await s.get(`pk:${signer.pub}`)
+        v = await verifyMemberAssertion(a.assertion, { publicKey: signer.pub, text: a.ros, storedSignCount: rec.signCount })
+        if (!v.ok) return out(400, { error: `assertion-${v.reason}` })
+        await s.put(`pk:${signer.pub}`, { ...rec, signCount: v.value.signCount }) // in order, per credential
+      }
 
       // exactly one change; quarantine marks are the directory's, never the requester's
       const was = new Map(cur.members.map((m) => [m.pub, m]))
@@ -771,8 +793,15 @@ export class Roster {
       }
       if (added.length + removed.length !== 1) return out(400, { error: added.length + removed.length === 0 ? 'no-change' : 'multi-change' })
       let change, reg = null
-      if (added.length === 1) {
-        if (added[0].kind !== 'pk') return out(400, { error: 'kind' }) // consent and recovery keys come with their own rules
+      if (a.newKey !== undefined && !(added.length === 1 && added[0].kind === 'ck')) return out(400, { error: 'new-key' })
+      if (added.length === 1 && added[0].kind === 'ck') {
+        // a consent key joins only by proving it holds its key: its own cns. over this ros. text (no one adds a key they do not hold)
+        if (a.reg !== undefined) return out(400, { error: 'registration' })
+        const c = await ckConsent(added[0], a.newKey, a.ros, next.dirNonce, 'roster', now)
+        if (!c.ok) return out(400, { error: `new-key-${c.reason}` })
+        change = { op: 'add', pub: added[0].pub, kind: 'ck' }
+      } else if (added.length === 1) {
+        if (added[0].kind !== 'pk') return out(400, { error: 'kind' }) // recovery keys come with their own rules
         const r = await verifyRegistration(a.reg, b64uDec(next.dirNonce))
         if (!r.ok) return out(400, { error: `registration-${r.reason}` })
         if (r.value.pub !== added[0].pub) return out(400, { error: 'registration-key' })
@@ -784,10 +813,30 @@ export class Roster {
         change = { op: 'remove', pub: removed[0].pub }
       }
 
+      // Ripeness has ONE source: the stored chain through the kernel's verifier,
+      // measured at requestedAt (now). It is read only when a consent key is
+      // involved, so a passkey's plain request on an account without one is
+      // decided exactly as before.
+      const hasCk = cur.members.some((m) => m.kind === 'ck')
+      const since = ckAsk || a.cosign !== undefined || hasCk ? await sinceOf(s, this.env, now) : new Map()
+      let cosign = null
+      if (a.cosign !== undefined) {
+        const c = await checkCosign(a.cosign, { head: cur, requester: signer.pub, text: a.ros, nonce: next.dirNonce, since, at: now })
+        if (!c.ok) return out(400, { error: c.reason })
+        cosign = c.value
+      }
+      const waived = !!cosign || (ckAsk && ripeAt(since, signer.pub, now))
+      const how = ckAsk ? 'app' : hostClass(v.value.origin)
+      // X5: ANY key added from a browser (a passkey or a consent key), on an account with a ripe consent key,
+      // waits 7 days unless that key co-signs it; a consent key is the more dangerous add, never the shorter wait
+      const x5 = !waived && change.op === 'add' && how === 'browser' &&
+        cur.members.some((m) => m.kind === 'ck' && !m.quarantined && ripeAt(since, m.pub, now))
       const p = {
-        ros: a.ros, hash: await sha256b64u(a.ros), change, signer: signer.pub, credId: a.credId, assertion: a.assertion,
-        reg, requestedAt: now, ripensAt: now + ROSTER_WAIT_MS, os: origin, rq: a.rq || '', co: v.value.origin,
-        how: hostClass(v.value.origin),
+        ros: a.ros, hash: await sha256b64u(a.ros), change, signer: signer.pub,
+        ...(ckAsk ? { sk: 'ck', sig: a.sig, cns: a.cns } : { credId: a.credId, assertion: a.assertion }),
+        ...(cosign ? { cosign } : {}), ...(x5 ? { x5: true } : {}), ...(waived ? { waived: true } : {}),
+        reg, requestedAt: now, ripensAt: now + (x5 ? X5_WAIT_MS : ROSTER_WAIT_MS), os: origin, rq: a.rq || '', co: v.value.origin,
+        how,
       }
       const by = await fingerprint(signer.pub)
 
@@ -796,6 +845,41 @@ export class Roster {
         next.members.some((m) => m.kind === 'pk' && !m.quarantined)
       if (selfRemoval) {
         await this.apply({ ...p, requestedAt: now }, now, 'remove-self')
+        return out(200, { ros: a.ros, inForce: true })
+      }
+
+      // Asked for by a ripe consent key, or co-signed by one: no wait. Its
+      // notice still goes BEFORE it acts (security's D1, F1): the hold is taken
+      // first, so nothing else lands while the mail is out, and the change
+      // happens only once the mailer accepted a notice that says it did.
+      const noun = (pub) => (cur.members.find((m) => m.pub === pub)?.kind === 'ck' ? 'app key' : 'passkey')
+      if (waived) {
+        const hold = await this.takeHold(now, 'consent')
+        const records = await this.records(cur.members)
+        const fp = await fingerprint(change.pub)
+        const what = change.op === 'add' ? `the ${change.kind === 'ck' ? 'app key' : 'passkey'} ${fp} was added`
+          : change.pub === signer.pub ? `the ${noun(change.pub)} ${fp} removed itself` : `the ${noun(change.pub)} ${fp} was removed`
+        const sent = await notify(this.env, next.address, 'Your bento/id passkeys changed', [
+          `At ${when(now)} ${what} on this bento/id account, ${HOW[how]}.`,
+          `It was asked for by the ${noun(signer.pub)} ${by}${records[signer.pub] ? `, added ${when(records[signer.pub].addedAt)} ${HOW[records[signer.pub].how] ?? ''}`.trimEnd() : ''}.`,
+          cosign
+            ? `It took effect at once because the app key ${await fingerprint(cosign.signer)}, on this account for 72 hours or more, approved it too.`
+            : `It took effect at once because the app key that asked has been on this account for 72 hours or more.`,
+          '',
+          'The passkeys on this account now:',
+          ...(await rosterLines(next.members, records, null)),
+          '',
+          'If you did not ask for this, sign in on a device you trust and remove what you do not recognise.',
+        ])
+        const mine = (await s.get('hold'))?.id === hold
+        const atHead = await s.get('head')
+        if (!sent || !mine || atHead.hash !== cur.hash || (await s.get('pend'))) {
+          await this.dropHold(hold)
+          return out(sent ? 409 : 503, { error: sent ? 'superseded' : 'mail' })
+        }
+        if (reg) await this.log({ k: 'reg', at: now, seq: next.seq, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: reg.origin })
+        await this.apply(p, now, 'consent', true)
+        await this.dropHold(hold)
         return out(200, { ros: a.ros, inForce: true })
       }
 
@@ -822,12 +906,13 @@ export class Roster {
       }
       const records = await this.records(cur.members)
       const rec2 = records[signer.pub]
-      const what = change.op === 'add' ? `add the passkey ${await fingerprint(change.pub)}`
-        : change.pub === signer.pub ? `remove the passkey ${by}, which asked for it` : `remove the passkey ${await fingerprint(change.pub)}`
+      const what = change.op === 'add' ? `add the ${change.kind === 'ck' ? 'app key' : 'passkey'} ${await fingerprint(change.pub)}`
+        : change.pub === signer.pub ? `remove the ${noun(signer.pub)} ${by}, which asked for it` : `remove the ${noun(change.pub)} ${await fingerprint(change.pub)}`
       const sent = await notify(this.env, next.address, 'A change to your bento/id passkeys is waiting', [
         `At ${when(now)} a change to this bento/id account was asked for ${HOW[p.how]}: ${what}.`,
-        `It was asked for by the passkey ${by}${rec2 ? `, added ${when(rec2.addedAt)} ${HOW[rec2.how] ?? ''}`.trimEnd() : ''}.`,
-        `It takes effect at ${when(p.ripensAt)}, 72 hours after it was asked for.`,
+        `It was asked for by the ${noun(signer.pub)} ${by}${rec2 ? `, added ${when(rec2.addedAt)} ${HOW[rec2.how] ?? ''}`.trimEnd() : ''}.`,
+        x5 ? `It takes effect at ${when(p.ripensAt)}, 7 days after it was asked for: a key added from a browser waits that long on an account with an app key, unless the app approves it when it is asked for.`
+          : `It takes effect at ${when(p.ripensAt)}, 72 hours after it was asked for.`,
         '',
         'The passkeys on this account once it takes effect:',
         ...(await rosterLines(next.members, records, change.op === 'add' ? change.pub : null)),
@@ -844,7 +929,7 @@ export class Roster {
       await s.put('pend', { ...p, mailed: true })
       await this.schedule(p.ripensAt)
       if (reg) await this.log({ k: 'reg', at: now, seq: next.seq, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: reg.origin })
-      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: p.co })
+      await this.log({ k: 'request', at: now, seq: next.seq, op: change.op, pub: change.pub, by: signer.pub, os: origin, rq: p.rq, co: p.co, ...consentLog(p) })
       return out(202, { ros: a.ros, requestedAt: now, ripensAt: p.ripensAt })
     }
 
@@ -978,7 +1063,7 @@ export class Roster {
       if (!still || still.voidTok !== p.voidTok || atHead.hash !== cur.hash) { await this.dropHold(hold); return out(409, (await this.endedAnswer(th, now)) ?? { error: 'superseded' }) }
       if (!mine) return out(409, { error: 'busy' })
       await this.link(qRos, { auth: 'q', cause: p.hash, requestedAt: now, now, kind: 'quarantine',
-        extra: { voided: { ros: p.ros, signer: target, assertion: p.assertion } } })
+        extra: { voided: { ros: p.ros, signer: target, ...(p.sk === 'ck' ? { sig: p.sig, cns: p.cns } : { assertion: p.assertion }) } } })
       // the removal is requested at the moment the suspension takes effect (the kernel's x rule)
       await s.put('pend', {
         kind: 'removal', ros: xRos, hash: await sha256b64u(xRos), change: { op: 'remove', pub: target }, cause: qHash,
@@ -1120,7 +1205,7 @@ export class Roster {
       const rec = await s.get(`pk:${who.pub}`)
       const count = signCountOf(a.assertion)
       if (!rec || count === null) return out(400, { error: 'assertion' })
-      const chain = await verifyRosterChain(await this.storedChain(), { directoryKeys: await directoryKeys(this.env), rpId: PASSKEY.rpId, origins: passkeyOrigins(), now })
+      const chain = await verifyRosterChain(await this.storedChain(), chainOpts(this.env, now)) // the chain as a peer verifies it, consent keys included
       if (!chain.ok) throw new Error(`the stored chain does not verify: ${chain.reason}`) // never: the directory countersigned every link
       // the challenge was spent first, so the kernel is told it spends; one verifier, no second check beside it
       const v = await verifyResetStop(a.text, who.pub, { assertion: a.assertion }, {
