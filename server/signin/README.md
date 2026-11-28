@@ -61,7 +61,7 @@ press, never from a message. These pages answer no message and post none.
 |---|---|
 | `/setup#v=1&e=<address>&t=<token>` | a mailed setup link (G13): make a passkey for the address, then sign in with it once |
 | `/reset#v=1&e=<address>&t=<token>` | a mailed reset link: make a new passkey; the reset waits 72 hours at the directory |
-| `/account` | sign in on this host; ask for a setup or reset link; sign out every browser |
+| `/account` | sign in on this host; ask for a setup or reset link; sign out every browser; stop a waiting reset |
 
 The rules (`public/account-client.js`; each has a rig row and a mutant):
 
@@ -90,16 +90,22 @@ The rules (`public/account-client.js`; each has a rig row and a mutant):
 5. **Sign out everywhere** is a member's assertion over `wout.` for the
    account this host is signed in to, after a confirmation screen that names
    it.
-6. **No recovery code on the web** (X7): no page makes, shows or asks for one.
+6. **Stop a waiting reset** is a member's assertion over the kernel's `vrs.`
+   text for the reset the directory showed, after a confirmation screen that
+   says when it was asked for and when it would take effect. `vrsText` is the
+   kernel's `buildVrs`, byte for byte (rig row). The directory judges the
+   account's age, the signer and the proof; the page only names the refusal.
+7. **No recovery code on the web** (X7): no page makes, shows or asks for one.
    The setup page says what a browser-only account loses (X3).
 
 ## Directory routes for the pages
 
 `public/account-client.js` is the pages' seam. The routes the directory has
 are used as they are: `/v1/roster/setup/start`, `/v1/roster/reset/start`,
-`/v1/roster/challenge`, `/v1/roster/setup` and `/v1/roster/reset`. Four
-routes do **not exist yet**, and `scripts/lib/id-signin-directory-stub.mjs`
-is their contract, check by check, which the rigs run against:
+`/v1/roster/challenge`, `/v1/roster/setup`, `/v1/roster/reset`, the roster
+read `GET /v1/roster?e=` and `/v1/roster/reset/void`, and the four below,
+whose contract, check by check, is
+`scripts/lib/id-signin-directory-stub.mjs`, which the rigs run against:
 
 | route | request | answer |
 |---|---|---|
@@ -108,10 +114,13 @@ is their contract, check by check, which the rigs run against:
 | `POST /v1/web/signout/challenge` | `{address}` | `{nonce, at}`, audience `signout`, bound to that account |
 | `POST /v1/web/signout` | `{text, assertion}` | `{ok: true, at}`; every browser certificate of the account is revoked |
 
-The `wout.` text (`wout.<b64u(address)>.<at>.<nonce>`) is **provisional**:
-the kernel defines the layout, and until it does the directory answers 501 at
-`/v1/web/signout/challenge`, before any passkey prompt; the page then says
-signing every browser out is not available yet.
+The `wout.` text (`wout.<b64u(address)>.<at>.<nonce>`) is the kernel's
+layout (`kernel/src/roster.ts` `buildWout`). The directory accepts at most a
+few sign-outs per account a day, across every member and IP (security's D-W2
+on #962), and answers 429 `rate-limited` past that. A directory that cannot
+sign browsers out answers 501 at `/v1/web/signout/challenge`, before any
+passkey prompt; the page then says signing every browser out is not
+available yet.
 
 ## Phone approves this browser (route D): designed, not built
 

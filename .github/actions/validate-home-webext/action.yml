@@ -1,6 +1,6 @@
 # validate, home-webext slice: home/webext: the browser extension's package and rigs.
 #
-# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# Read by scripts/check.mjs (2026-11-28): `validate` runs the steps a diff reaches, the release full check runs them all. Until then, .github/workflows/ci.yml runs this
 # action as steps INSIDE that one job, on the same runner, after the slices
 # listed before it there — so what earlier slices installed and built is on
 # disk here. A failing step here fails `validate` and blocks the merge.
@@ -183,7 +183,7 @@ runs:
       # the release list a release writes (scripts/lib/home-web-served.mjs,
       # sign-home-web-served.mjs) against the list the extension reads; the
       # judge's rules on hand-made observations. Throwaway keys only. The
-      # browser half is the webext-tripwire job in ci-home.yml, and its
-      # mutant per rule the webext-tripwire-mutants job.
+      # browser half, with a mutant per rule, is the webext-tripwire job in
+      # ci-home.yml.
       shell: bento-step {0}
       run: node scripts/test-webext-tripwire.ts

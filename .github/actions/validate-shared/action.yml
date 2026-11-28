@@ -1,6 +1,6 @@
 # validate, shared slice: The shared surface (scripts/, site tooling, i18n packs): checks that span every app. Runs LAST, after every shell is built.
 #
-# Part of the REQUIRED `validate` check. .github/workflows/ci.yml runs this
+# Read by the quick check (`validate`) and the release full check. Until 2026-11-28 .github/workflows/ci.yml ran this
 # action as steps INSIDE that one job, on the same runner, after the slices
 # listed before it there — so what earlier slices installed and built is on
 # disk here. A failing step here fails `validate` and blocks the merge.
@@ -42,10 +42,10 @@ runs:
         node scripts/sign-packs.mjs "$RUNNER_TEMP/packs" --dry
 
     - name: Shell sizes
-      # TWO MECHANISMS, DELIBERATELY. This one and the advisory PR build-size
-      # comment (.github/workflows/pr-build-size*.yml) answer different
-      # questions, and deleting either as "duplicate measurement" loses a
-      # class of regression:
+      # TWO MECHANISMS, DELIBERATELY, until 2026-11-28. This one and the
+      # advisory PR build-size comment (pr-build-size*.yml, removed that day:
+      # GitHub now runs only the one-minute quick check) answered different
+      # questions; the relative per-PR comparison below is what was given up:
       #
       #   this step  — ABSOLUTE and PERSISTENT. A shell with enforce:true has
       #     a ceiling and FAILS here; a shell with enforce:false prints its
@@ -276,3 +276,12 @@ runs:
       # exits 124 within the stall budget; a clean close stays quiet.
       shell: bento-step {0}
       run: node scripts/test-browser-guard.mjs
+
+    - name: The quick check's plan, tiers, cache and sweep gate
+      # scripts/check.mjs decides what every pull request runs. Each way a step
+      # can be reached (an import, a text read, a joined path, a bundled rig, a
+      # built shell, a changed CI step) is held against a small repository,
+      # each with a control that must not be reached; and release.mjs's
+      # refusal without a green sweep is held in place.
+      shell: bento-step {0}
+      run: node scripts/test-check.mjs

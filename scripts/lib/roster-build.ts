@@ -9,7 +9,7 @@
 
 import { b64uEnc, sha256b64u, signStatement, buildConsent, consentTranscript } from '../../kernel/src/statements.ts'
 import { publicKeyOf } from '../../kernel/src/recovery.ts'
-import { buildRos, buildRip, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type MemberKind, type Authority } from '../../kernel/src/roster.ts'
+import { buildRos, buildRip, buildAdel, ROSTER_RP_ID, ROSTER_WEB_ORIGINS, type MemberKind, type Authority } from '../../kernel/src/roster.ts'
 
 export const te = new TextEncoder()
 export const sha = async (b: Uint8Array | string) => new Uint8Array(await crypto.subtle.digest('SHA-256', (typeof b === 'string' ? te.encode(b) : b) as BufferSource))
@@ -109,7 +109,9 @@ export interface Spec {
   // the authority word (default m, or r with reset) and its cause ('prev' = sha256 of the previous head)
   auth?: Authority; cause?: string | 'prev' | null
   // auth q: the request the void cancelled, built against the previous head unless prev is given
-  voided?: { members: M[]; signer: string; proof?: 'assertion' | 'sig' | 'cns'; cns?: CnsOpts; assert?: AssertOpts & { by?: string }; prev?: string | null; address?: string; seq?: number }
+  // (adel: the voided request is a deletion request naming `head`, default the previous head; members unused)
+  voided?: { members: M[]; signer: string; proof?: 'assertion' | 'sig' | 'cns'; cns?: CnsOpts; assert?: AssertOpts & { by?: string }; prev?: string | null; address?: string; seq?: number
+    adel?: { head?: string; text?: string } }
   // auth l: the cited ripened change, as built links
   cited?: { prevRos: string; ros: string; rip: string; ripSig: string }
 }
@@ -130,12 +132,14 @@ export async function link(s: Spec, prev: { text: string; seq: number } | null, 
   let voided: Link['voided']
   if (s.voided) {
     const v = s.voided
-    const vros = buildRos({ address: v.address ?? s.address ?? ADDRESS, seq: v.seq ?? seq, prev: v.prev !== undefined ? v.prev : prevHash,
-      members: v.members.map(([kind, l, q]) => ({ kind, pub: pubOf(l), quarantined: q === 'q' })), dirNonce: nonce(i + 50), created: s.req })
+    const vros = v.adel
+      ? v.adel.text ?? buildAdel({ address: v.address ?? s.address ?? ADDRESS, headHash: v.adel.head ?? prevHash!, dirNonce: nonce(i + 50) })
+      : buildRos({ address: v.address ?? s.address ?? ADDRESS, seq: v.seq ?? seq, prev: v.prev !== undefined ? v.prev : prevHash,
+        members: v.members.map(([kind, l, q]) => ({ kind, pub: pubOf(l), quarantined: q === 'q' })), dirNonce: nonce(i + 50), created: s.req })
     voided = { ros: vros, signer: pubOf(v.signer) }
     const vp = v.proof ?? defaultProof(v.signer)
     if (vp === 'assertion') voided.assertion = await assertion(v.assert?.by ?? v.signer, vros, v.assert)
-    else if (vp === 'cns') { const c = await cosign(v.signer, vros, nonceOf(vros), s.req, v.cns); voided.cns = c.cns; voided.sig = c.sig }
+    else if (vp === 'cns') { const c = await cosign(v.signer, vros, v.adel ? vros.split('.')[3] : nonceOf(vros), s.req, v.cns); voided.cns = c.cns; voided.sig = c.sig }
     else voided.sig = await signStatement(K[v.signer].key, vros)
   }
   const auth: Authority = s.auth ?? (s.reset ? 'r' : 'm')

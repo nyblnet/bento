@@ -128,6 +128,9 @@ const MUTANTS = [
   // false warning did not reproduce, 8 of 8 quiet without the line; with C5's tabId -1 listener it is 3 in 8)
   { name: 'unread bytes waived under any worker (C2), at /index.html', row: 'stage3-vary-text-index', file: J, from: "(!obs.viaWorker || obs.cspFrom === 'navigation') && !obs.bytes", to: '!obs.viaWorker && !obs.bytes' },
   { name: 'bytes rule off, at /index.html', row: 'stage3-text-index', file: J, from: 'if (obs.bytes && obs.bytes.sha256 !== e.sha256)', to: 'if (false)' },
+  // the build's own 404 page (security ruling #956 D1)
+  { name: 'a script-free unlisted page is loud (the build\'s 404 page)', row: 'unlisted-404-build', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (false) {' },
+  { name: 'an unlisted page is quiet even with a script', row: 'unlisted-404-build-script', file: J, from: 'if (!obs.scripts?.length && !obs.flags?.length && !listedPath(list, origin, obs.url)) {', to: 'if (!obs.flags?.length && !listedPath(list, origin, obs.url)) {' },
 ]
 
 // A run that never reached the browser (a local port taken between freePorts and listen) is
