@@ -42,7 +42,7 @@ try {
   put('kernel/src/a.ts', "export const a = 1\n")
   put('kernel/src/b.ts', "export const b = 2\n")
   put('kernel/src/c.ts', "import { a } from './a.ts'\nexport const c = a\n")
-  put('slides/src/main.ts', "import { c } from '../../kernel/src/c.ts'\nconsole.log(c)\n")
+  put('slides/src/main.ts', "import { c } from '../../kernel/src/c.ts'\n// why: see 'docs/notes.md'\nconst why = 'docs/notes.md'\nconsole.log(c, why)\n")
   put('slides/package-lock.json', '{}\n')
   put('docs/notes.md', 'notes\n')
   put('scripts/test-imports.ts', "import { a } from '../kernel/src/a.ts'\nconsole.log(a)\n")
@@ -51,7 +51,7 @@ try {
   put('scripts/test-joined.mjs', "import { join } from 'node:path'\nconst f = join(root, 'kernel', 'src', 'b.ts')\n")
   put('scripts/test-shell.mjs', "const shell = '../slides/dist-single/Bento_Slides.bento.html'\n")
   put('scripts/test-bundled.ts', "import { b } from '../kernel/src/b.ts'\n")
-  put('scripts/test-lonely.ts', "console.log('reads nothing')\n")
+  put('scripts/test-lonely.ts', "// background: 'docs/notes.md'\nconsole.log('reads nothing')\n")
   put('scripts/test-thing-mutants.ts', "import './test-imports.ts'\n")
   put('scripts/test-ui-browser.mjs', "const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')\nconst s = '../slides/dist-single/Bento_Slides.bento.html'\n")
   put('scripts/shell-gate.mjs', "export const gate = 1\n")
@@ -155,7 +155,8 @@ jobs:
   {
     const { p, by } = planOf(() => put('docs/notes.md', 'more notes\n'))
     ok(p.rigs.every((s) => s.distance === Infinity), 'a docs-only change reaches no step')
-    ok(by('imports').distance === Infinity && !p.wantBuilds.length, 'and builds nothing')
+    ok(by('imports').distance === Infinity && !p.wantBuilds.length, 'and builds nothing, though app source names the doc (it is bundled and reads no file)')
+    ok(by('lonely').distance === Infinity, 'a rig naming the doc only in a comment is not reached')
   }
   {
     const { by } = planOf(() => put('scripts/test-lonely.ts', "console.log('changed')\n"))

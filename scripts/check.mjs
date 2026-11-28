@@ -35,6 +35,9 @@
 // --only A,B         only steps whose id, name or script contains A or B (with a full run)
 // --logs DIR         each step's output (default: a new folder under the cache)
 // --json FILE        write the run's result as JSON (the sweep reads it)
+// --rerun-failed     rerun each failed step once, alone, at the end; one that
+//                    passes is reported "flaky (passed alone)" and STILL fails
+//                    the run (the sweep uses it, to tell load from a break)
 //
 // A step runs as CI runs it: its run text under bash -eo pipefail, in its
 // working directory, with its env, GITHUB_WORKSPACE (this checkout),
@@ -68,7 +71,7 @@ const HERE = process.platform === 'darwin' ? 'macos' : process.platform === 'win
 // ---------------------------------------------------------------- options
 
 const argv = process.argv.slice(2)
-const opts = { affected: false, ref: '', dryRun: false, head: '', deep: false, cache: true, jobs: 0, only: '', logs: '', json: '' }
+const opts = { affected: false, ref: '', dryRun: false, head: '', deep: false, cache: true, jobs: 0, only: '', logs: '', json: '', rerun: false }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--affected') {
@@ -82,6 +85,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--only') opts.only = argv[++i] ?? usage('--only needs text')
   else if (a === '--logs') opts.logs = resolve(argv[++i] ?? usage('--logs needs a folder'))
   else if (a === '--json') opts.json = resolve(argv[++i] ?? usage('--json needs a file'))
+  else if (a === '--rerun-failed') opts.rerun = true
   else if (a === '-h' || a === '--help') usage()
   else usage(`unknown option ${a}`)
 }
@@ -336,7 +340,7 @@ const stamp = (s) => s.id.replace(/[^\w#.-]+/g, '_').replace(/#/g, '-')
 async function runStep(c) {
   const s = c.step
   const key = stepKey(s)
-  const hit = opts.cache ? cached(CACHE, key) : null
+  const hit = opts.cache && !c.rerun ? cached(CACHE, key) : null
   if (hit) return report(c, { status: 'cached', ms: 0, note: `cached, ${hit.commit}` })
   if (!runnableHere(s)) {
     return report(c, { status: 'not here', ms: 0, note: `needs a ${s.platform} runner: gh workflow run ${s.file.split('/').pop()}` })
@@ -381,10 +385,10 @@ function report(c, r) {
   const s = c.step
   const res = { id: s.id, job: s.job, name: s.name, label: label(s), tier: s.tier.tier, status: r.status, ms: r.ms, note: r.note || '', log: r.log || null, typecheck: /(?:^|\s)(?:\S*\/)?tsc\s/.test(s.run) }
   results.push(res)
-  if (r.status === 'FAIL') failed++
+  if (r.status === 'FAIL' && !c.rerun) failed++
   const t = r.status === 'cached' || r.status === 'not here' || r.status === 'left' ? '' : secs(r.ms)
   const mark = { ok: 'ok  ', cached: 'ok  ', FAIL: 'FAIL', SKIP: 'SKIP', 'not here': 'HERE', left: 'LEFT' }[r.status]
-  console.log(`${mark} ${t.padStart(6)}  ${label(s).padEnd(44)} ${s.id}${r.note ? `  (${r.note})` : ''}`)
+  console.log(`${mark} ${t.padStart(6)}  ${label(s).padEnd(44)} ${s.id}${c.rerun ? '  (rerun alone)' : ''}${r.note ? `  (${r.note})` : ''}`)
   if (r.status === 'FAIL' && r.out) {
     if (ON_CI) console.log(`::group::${s.id} output (its failing lines, then its last 25)`)
     console.log(failText(r.out))
@@ -433,6 +437,16 @@ if (!chosen.length) {
     const jobs = [...byJob.values()].sort((a, b) => b.length - a.length)
     await pool(jobs, workers, async (list) => { for (const c of list) await runStep(c) })
   }
+  if (opts.rerun) {
+    const failedSteps = chosen.filter((c) => results.some((r) => r.id === c.step.id && r.status === 'FAIL'))
+    if (failedSteps.length) console.log(`\nrerunning ${failedSteps.length} failed step${failedSteps.length === 1 ? '' : 's'} alone`)
+    for (const c of failedSteps) {
+      const before = results.find((r) => r.id === c.step.id && r.status === 'FAIL')
+      const again = await runStep({ ...c, rerun: true })
+      results.splice(results.indexOf(again), 1)
+      if (again.status === 'ok') { before.note = `flaky: failed in the run, passed alone${before.note ? `; ${before.note}` : ''}`; before.flaky = true }
+    }
+  }
   try { writeTimes(CACHE, timesUpdate) } catch { /* best-effort */ }
   prune()
   const pr = [...providers].map(([p, v]) => [p, v])
@@ -449,6 +463,8 @@ if (!chosen.length) {
   const slow = ran.filter((r) => r.tier === 'fast' && r.ms > 5000 && opts.affected && !r.typecheck)
   if (leftovers.length) console.log(`left processes running when they ended (stopped): ${leftovers.join(', ')}`)
   if (slow.length) console.log(`over 5 s (move to full in scripts/lib/test-tiers.mjs, with a reason): ${slow.map((r) => `${r.label} ${secs(r.ms)}`).join(', ')}`)
+  const flaky = results.filter((r) => r.flaky).map((r) => r.label)
+  if (flaky.length) console.log(`flaky (failed in the run, passed alone; still failures): ${flaky.join(', ')}`)
   console.log(`${failed ? 'FAIL' : 'ok'}: ${count('ok')} passed, ${count('cached')} cached, ${count('FAIL')} failed, ${count('SKIP')} skipped, ${count('not here')} not here, ${count('left')} past the deadline${opts.affected ? `, ${left.length} left to the sweep` : ''}; ${since()}${ON_CI ? '' : `; logs ${LOGS}`}`)
 }
 

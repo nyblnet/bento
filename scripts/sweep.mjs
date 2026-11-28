@@ -26,6 +26,8 @@
 //       skipped, notHere, logs, firstBad }
 //   Passes are remembered by content (scripts/lib/check-cache.mjs), so a
 //   second sweep reruns only what changed.
+// - A failed step is rerun once alone; one that passes is marked flaky and the
+//   sweep is STILL red (load is not a pass; the rig or the machine needs a look).
 // - On a failure: bisects the first-parent commits since the last green sweep,
 //   rerunning only the failed steps (by script), and names the first bad commit.
 //
@@ -62,7 +64,7 @@ export function summaryLine(r) {
   const c = r.counts ?? {}
   const counts = ` (${c.ok ?? 0} passed, ${c.cached ?? 0} cached${c.SKIP ? `, ${c.SKIP} skipped` : ''}${c['not here'] ? `, ${c['not here']} not here` : ''})`
   if (r.ok) return `${head}: green${counts}${took}`
-  const fails = r.failures.map((f) => f.label).join('; ')
+  const fails = r.failures.map((f) => `${f.label}${f.flaky ? ' (flaky: passed alone)' : ''}`).join('; ')
   const bad = r.firstBad?.sha ? `; first bad ${r.firstBad.sha.slice(0, 9)} "${r.firstBad.subject}"` : r.firstBad?.why ? `; ${r.firstBad.why}` : ''
   return `${head}: RED: ${fails || 'see the log'}${bad}${counts}${took}${r.logs ? `; logs ${r.logs}` : ''}`
 }
@@ -226,9 +228,9 @@ async function main(argv) {
   const dir = worktreeAt(opts.name, sha)
   const jobs = opts.jobs ? ['--jobs', opts.jobs] : []
   if (!quiet) console.log(`in ${dir}; logs ${logs}`)
-  const r = await check(dir, jobs, logs)
+  const r = await check(dir, ['--rerun-failed', ...jobs], logs)
   const results = r.result?.results ?? []
-  const failures = results.filter((x) => x.status === 'FAIL').map((x) => ({ id: x.id, label: x.label, note: x.note, log: x.log }))
+  const failures = results.filter((x) => x.status === 'FAIL').map((x) => ({ id: x.id, label: x.label, note: x.note, log: x.log, flaky: !!x.flaky }))
   if (r.code !== 0 && !failures.length) failures.push({ id: 'check', label: `check.mjs exit ${r.code}`, note: 'see sweep.log' })
   const skipped = results.filter((x) => x.status === 'SKIP').map((x) => ({ id: x.id, label: x.label, note: x.note }))
   const notHere = results.filter((x) => x.status === 'not here').map((x) => ({ id: x.id, label: x.label, note: x.note }))
