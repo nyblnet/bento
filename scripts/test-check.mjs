@@ -19,7 +19,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { planFor, setupOf } from './lib/check-plan.mjs'
+import { planFor, previousTag, setupOf } from './lib/check-plan.mjs'
 import { keyOf, workBlobs } from './lib/check-cache.mjs'
 import { matchTier, entryMatches, ENTRIES } from './lib/test-tiers.mjs'
 import { bisect, sinceGreen, isGreen, summaryLine } from './sweep.mjs'
@@ -184,6 +184,19 @@ jobs:
   ok(matchTier({ scripts: ['scripts/test-x.ts'], run: 'node scripts/test-x.ts', job: 'home-android-unit', needs: [] }).tier === 'deep', 'a step that needs an Android SDK is deep')
   ok(entryMatches({ rig: '*-mutants.{ts,mjs}' }, { scripts: ['scripts/test-a-mutants.mjs'], run: '', job: '' }) && !entryMatches({ rig: '*-mutants.{ts,mjs}' }, { scripts: ['scripts/test-mutantsx.ts'], run: '', job: '' }), 'tier globs match whole names')
 
+  console.log('\nthe release check\'s scope: since the app\'s previous tag')
+  {
+    git('checkout', '-q', '--detach', base)
+    git('tag', 'v1.0.0', base); git('tag', 'v1.10.0', base); git('tag', 'spaces-v0.1.0', base)
+    put('docs/notes.md', 'release notes\n')
+    const rel = commit('release')
+    git('tag', 'v1.11.0', rel)
+    ok(previousTag(tmp, 'slides', rel) === 'v1.10.0', `a release commit's own tag is skipped, and versions sort as numbers (got ${previousTag(tmp, 'slides', rel)})`)
+    ok(previousTag(tmp, 'spaces', rel) === 'spaces-v0.1.0', 'an app\'s tags carry its prefix (spaces-v…), and slides\' bare v… are not its')
+    ok(previousTag(tmp, 'dash', rel) === null, 'no earlier tag: null, so the release check refuses rather than guessing')
+    git('checkout', '-q', '--detach', base)
+  }
+
   console.log('\nthe result cache keys on content')
   {
     git('checkout', '-q', '--detach', base)
@@ -209,6 +222,8 @@ jobs:
     const found = await bisect(['c3', 'c4', 'c5'], async (c) => c >= 'c4')
     ok(found.sha === 'c4', `bisect names the first bad commit (${found.sha})`)
     ok(isGreen('c2', dir) && !isGreen('c5', dir), 'only a commit with a green result is green')
+    writeFileSync(join(dir, 'c6.release-slides.json'), JSON.stringify({ sha: 'c6', ok: true }))
+    ok(isGreen('c6', dir, 'slides') && !isGreen('c6', dir, 'spaces') && !isGreen('c6', dir), 'a green release check counts for its own app only')
     writeFileSync(join(dir, 'c5.json'), JSON.stringify({ sha: 'c5', ok: false, failures: [{ label: 'test-x.ts' }], counts: {} }))
     ok(!isGreen('c5', dir) && /RED: test-x\.ts/.test(summaryLine(JSON.parse(readFileSync(join(dir, 'c5.json'), 'utf8')))), 'a red sweep names what failed')
     rmSync(dir, { recursive: true, force: true })
@@ -217,8 +232,8 @@ jobs:
   console.log('\nrelease.mjs waits for a green sweep')
   {
     const rel = readFileSync(join(root, 'scripts/release.mjs'), 'utf8')
-    const gate = rel.indexOf('// SWEEP GATE')
-    ok(gate > 0 && /isGreen\(head\)/.test(rel.slice(gate)) && /process\.exit\(1\)/.test(rel.slice(gate, gate + 2000)), 'release.mjs refuses a commit without a green sweep')
+    const gate = rel.indexOf('// RELEASE CHECK GATE')
+    ok(gate > 0 && /isGreen\(head, SWEEPS, appKey\)/.test(rel.slice(gate)) && /process\.exit\(1\)/.test(rel.slice(gate, gate + 2000)), 'release.mjs refuses a commit without a green sweep')
     ok(gate > 0 && gate < rel.indexOf("execFileSync('npm', ['run', 'build:single']"), 'and refuses before it builds or signs anything')
     ok(/if \(!args\.includes\('--out'\)\)/.test(rel.slice(gate, gate + 1500)), 'a rehearsal (--out: a throwaway key, nothing published) is not held')
     ok(/--untracked-files=no/.test(rel.slice(gate, gate + 1500)), 'and a tree that differs from the swept commit is refused')

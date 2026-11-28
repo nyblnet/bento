@@ -15816,3 +15816,32 @@ and the required check alone took 9 to 11 minutes.
   check a release requires. They are not met per push: most mutant suites are
   in the full tier, so a green `validate` says nothing about them, and a
   review that cites CI for one has not run it.
+
+## 2026-11-28 — The release check covers what the release changed, and runs side by side
+
+The maintainer's clarification of the entry above: the full check at release
+tests what changed in that release, and must itself be fast.
+
+- **Scope: the diff since the app's previous release tag.** `node
+  scripts/sweep.mjs --release <app> <commit>` (check.mjs `--release`) runs
+  every step, in every tier, that the diff since the newest earlier tag of
+  that app (`<tagPrefix>vX.Y.Z` from scripts/apps.mjs; the release commit's own
+  tag is skipped) reaches, through the same reach map as the quick check.
+  Unreached steps do not run. Steps this machine cannot run are listed NOT RUN.
+  No earlier tag, or a clone too shallow to see it: it refuses rather than
+  guess. `release.mjs` accepts a green release check of that app for the
+  commit (or a whole full-tier run); its conformance gate runs regardless.
+- **Speed.** Every reached step is scheduled at once, longest first (times from
+  earlier runs), at most 8 side by side, instead of job by job. Each shell is
+  built once and shared, guarded as a read/write lock so an inline rebuild
+  never deletes a shell another step is reading. A step two jobs both run
+  (same content key) runs once. Passes are cached by content, so a rerun
+  after a fix runs only what the fix touched. The five slowest mutant suites
+  run as shards side by side (`--shard k/n`, scripts/lib/shard.mjs): every
+  mutant runs exactly once across a suite's shards, an empty shard fails, and
+  test-ci-registered.ts fails if a suite's shard steps are not exactly 1..n.
+  No test was removed or loosened.
+- **Not done, and why:** one browser launch shared across rigs needs each
+  rig to accept a browser it did not launch; the rigs own their launches
+  (and their crash handling, scripts/lib/browser-guard.mjs), so that is a
+  change to each rig, not to the check.

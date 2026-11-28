@@ -107,6 +107,17 @@ export const ENTRIES = [
   { rig: 'test-shell-loader.ts', tier: 'full', why: 'its 50 ms hidden-tab splash timing fails inside the quick check on the runner (51 to 164 ms; 5 to 12 ms run alone); the sweep runs it' },
 ]
 
+/**
+ * Jobs whose steps share one device or one build folder, so even the release
+ * check (which otherwise runs every step side by side) runs them in CI's order,
+ * one at a time: the iOS simulator rigs drive one booted simulator, and run
+ * side by side test-home-snapshot-cover lost its cover check (measured
+ * 2026-11-28; it passes run in order).
+ */
+export const SEQUENTIAL_JOBS = [
+  { job: /^home-ios-/, why: 'one simulator and one Xcode derived-data folder' },
+]
+
 /** Rules, for steps no entry names. */
 export const RULES = [
   { needs: 'browser', tier: 'full', why: 'drives a browser: the quick check boots one shell per built app (the headless loads above); the rest is the sweep\'s' },

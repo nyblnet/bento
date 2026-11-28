@@ -53,7 +53,7 @@ jobs:
     # directory rigs must fail a row. A mutant that no longer applies, or a
     # rig that crashes instead of counting, fails this job. Its own job: at
     # ~7 s a mutant on a runner it outgrew validate's 20 minutes. Three
-    # shards side by side: at 160 mutants and ~11 s each (the kernel's
+    # shards side by side (six since 2026-11-28, for the release check's wall time): at 160 mutants and ~11 s each (the kernel's
     # option-G verifiers made each rig run slower) one job no longer fits
     # 30 minutes; each shard runs every third mutant and its own positive control,
     # and within a shard one mutant's three rigs run side by side.
@@ -62,14 +62,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: bento/connect directory mutants
-        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/3
+        run: node scripts/test-directory-mutants.ts --shard ${{ matrix.shard }}/6
 
   share-signin-browser:
     needs: share-gate

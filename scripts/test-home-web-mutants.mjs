@@ -15,6 +15,7 @@
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { shard } from './lib/shard.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -122,10 +123,10 @@ const MUTANTS = [
   },
 ]
 
-const only = process.argv.slice(2)
+const { args: only, pick } = shard(process.argv.slice(2), 'test-home-web-mutants')
 let checks = 0, failures = 0
 const ok = (c, m) => { checks++; if (!c) failures++; console.log(`  ${c ? 'ok  ' : 'FAIL'}  ${m}`) }
-for (const m of MUTANTS.filter((x) => !only.length || only.includes(x.name))) {
+for (const m of pick(MUTANTS.filter((x) => !only.length || only.includes(x.name)))) {
   const env = { ...process.env, BENTO_BROWSER: 'chromium', NODE_NO_WARNINGS: '1' }
   delete env.BENTO_HOME_WEB_MUTANT; delete env.BENTO_HOME_WEB_DIST_MUTANT
   if (m.src) env.BENTO_HOME_WEB_MUTANT = JSON.stringify(m.src)
