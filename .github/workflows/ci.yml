@@ -70,7 +70,10 @@ jobs:
       - name: Install the apps' node_modules (only when the lockfiles changed)
         if: steps.deps.outputs.cache-hit != 'true'
         run: |
-          for app in slides spaces dash type; do npm ci --prefix "$app" --no-audit --no-fund & done; wait
+          # (each install's own status: a bare `wait` returns 0 whatever failed)
+          pids=()
+          for app in slides spaces dash type; do npm ci --prefix "$app" --no-audit --no-fund & pids+=($!); done
+          for p in "${pids[@]}"; do wait "$p"; done
 
       - name: Restore the check's result cache and browser
         # Content-keyed passes (scripts/lib/check-cache.mjs), built shells and

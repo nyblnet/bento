@@ -369,7 +369,8 @@ async function browserSection(chrome: string, shell: string) {
   } finally {
     kill()
     server.close()
-    rmSync(profile, { recursive: true, force: true })
+    // (Chrome may still be writing its profile as it exits: retry, as rm -rf would)
+    rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }
 }
 
